@@ -1,0 +1,543 @@
+"use client";
+
+import { useState } from "react";
+import ReactMarkdown, { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { InputForm } from "@/components/InputForm";
+import {
+  ActivityTimeline,
+  ProcessedEvent,
+} from "@/components/ActivityTimeline";
+import { Copy, CopyCheck, Loader2, Bot, User } from "lucide-react";
+
+// Message types
+export interface MessageWithAgent {
+  type: "human" | "ai";
+  content: string;
+  id: string;
+  agent?: string;
+  finalReportWithCitations?: boolean;
+}
+
+interface ChatMessagesViewProps {
+  messages: MessageWithAgent[];
+  isLoading: boolean;
+  scrollAreaRef: React.RefObject<HTMLDivElement>;
+  onSubmit: (query: string) => void;
+  onCancel: () => void;
+  messageEvents: Map<string, ProcessedEvent[]>;
+  websiteCount: number;
+}
+
+// Enhanced markdown components for better styling
+const mdComponents: Partial<Components> = {
+  h1: ({ children, ...props }) => (
+    <h1
+      className="text-xl font-bold mb-3 text-slate-100 leading-tight"
+      {...props}
+    >
+      {children}
+    </h1>
+  ),
+  h2: ({ children, ...props }) => (
+    <h2
+      className="text-lg font-semibold mb-2 text-slate-100 leading-tight"
+      {...props}
+    >
+      {children}
+    </h2>
+  ),
+  h3: ({ children, ...props }) => (
+    <h3
+      className="text-base font-medium mb-2 text-slate-100 leading-tight"
+      {...props}
+    >
+      {children}
+    </h3>
+  ),
+  h4: ({ children, ...props }) => (
+    <h4
+      className="text-sm font-medium mb-1 text-slate-200 leading-tight"
+      {...props}
+    >
+      {children}
+    </h4>
+  ),
+  h5: ({ children, ...props }) => (
+    <h5
+      className="text-sm font-medium mb-1 text-slate-200 leading-tight"
+      {...props}
+    >
+      {children}
+    </h5>
+  ),
+  h6: ({ children, ...props }) => (
+    <h6
+      className="text-sm font-medium mb-1 text-slate-200 leading-tight"
+      {...props}
+    >
+      {children}
+    </h6>
+  ),
+  p: ({ children, ...props }) => (
+    <p className="mb-2 leading-relaxed text-slate-200 last:mb-0" {...props}>
+      {children}
+    </p>
+  ),
+  ul: ({ children, ...props }) => (
+    <ul
+      className="list-disc list-inside mb-2 space-y-1 text-slate-200"
+      {...props}
+    >
+      {children}
+    </ul>
+  ),
+  ol: ({ children, ...props }) => (
+    <ol
+      className="list-decimal list-inside mb-2 space-y-1 text-slate-200"
+      {...props}
+    >
+      {children}
+    </ol>
+  ),
+  li: ({ children, ...props }) => (
+    <li className="leading-relaxed text-slate-200" {...props}>
+      {children}
+    </li>
+  ),
+  blockquote: ({ children, ...props }) => (
+    <blockquote
+      className="border-l-4 border-blue-400 pl-4 py-2 mb-2 bg-slate-800/30 rounded-r italic text-slate-300"
+      {...props}
+    >
+      {children}
+    </blockquote>
+  ),
+  code: ({ children, ...props }) => (
+    <code
+      className="bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded text-sm font-mono"
+      {...props}
+    >
+      {children}
+    </code>
+  ),
+  pre: ({ children, ...props }) => (
+    <pre
+      className="bg-slate-800 text-slate-200 p-3 rounded-lg mb-2 overflow-x-auto border border-slate-700"
+      {...props}
+    >
+      {children}
+    </pre>
+  ),
+  table: ({ children, ...props }) => (
+    <div className="mb-2 overflow-x-auto">
+      <table
+        className="min-w-full border-collapse border border-slate-600 text-slate-200"
+        {...props}
+      >
+        {children}
+      </table>
+    </div>
+  ),
+  th: ({ children, ...props }) => (
+    <th
+      className="border border-slate-600 bg-slate-700 px-3 py-2 text-left font-medium"
+      {...props}
+    >
+      {children}
+    </th>
+  ),
+  td: ({ children, ...props }) => (
+    <td className="border border-slate-600 px-3 py-2" {...props}>
+      {children}
+    </td>
+  ),
+  a: ({ children, href, ...props }) => (
+    <a
+      className="text-blue-400 hover:text-blue-300 underline transition-colors"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+  strong: ({ children, ...props }) => (
+    <strong className="font-semibold text-slate-100" {...props}>
+      {children}
+    </strong>
+  ),
+  em: ({ children, ...props }) => (
+    <em className="italic text-slate-200" {...props}>
+      {children}
+    </em>
+  ),
+};
+
+// Human message bubble component with enhanced styling
+interface HumanMessageBubbleProps {
+  message: MessageWithAgent;
+  mdComponents: typeof mdComponents;
+}
+
+const HumanMessageBubble = ({
+  message,
+  mdComponents,
+}: HumanMessageBubbleProps): React.JSX.Element => (
+  <div className="flex items-start gap-3 max-w-[85%] ml-auto">
+    <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-4 rounded-2xl rounded-tr-sm shadow-lg border border-blue-500/20">
+      <ReactMarkdown
+        components={{
+          ...mdComponents,
+          p: ({ children, ...props }) => (
+            <p className="mb-2 leading-relaxed text-white last:mb-0" {...props}>
+              {children}
+            </p>
+          ),
+          h1: ({ children, ...props }) => (
+            <h1
+              className="text-xl font-bold mb-3 text-white leading-tight"
+              {...props}
+            >
+              {children}
+            </h1>
+          ),
+          h2: ({ children, ...props }) => (
+            <h2
+              className="text-lg font-semibold mb-2 text-white leading-tight"
+              {...props}
+            >
+              {children}
+            </h2>
+          ),
+          h3: ({ children, ...props }) => (
+            <h3
+              className="text-base font-medium mb-2 text-white leading-tight"
+              {...props}
+            >
+              {children}
+            </h3>
+          ),
+          code: ({ children, ...props }) => (
+            <code
+              className="bg-blue-800/50 text-blue-100 px-1.5 py-0.5 rounded text-sm font-mono"
+              {...props}
+            >
+              {children}
+            </code>
+          ),
+          strong: ({ children, ...props }) => (
+            <strong className="font-semibold text-white" {...props}>
+              {children}
+            </strong>
+          ),
+        }}
+        remarkPlugins={[remarkGfm]}
+      >
+        {message.content}
+      </ReactMarkdown>
+    </div>
+    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-md border border-blue-500/30">
+      <User className="h-4 w-4 text-white" />
+    </div>
+  </div>
+);
+
+// AI message bubble component with enhanced styling
+interface AiMessageBubbleProps {
+  message: MessageWithAgent;
+  mdComponents: typeof mdComponents;
+  handleCopy: (text: string, messageId: string) => void;
+  copiedMessageId: string | null;
+  agent?: string;
+  finalReportWithCitations?: boolean;
+  processedEvents: ProcessedEvent[];
+  websiteCount: number;
+  isLoading: boolean;
+}
+
+const AiMessageBubble = ({
+  message,
+  mdComponents,
+  handleCopy,
+  copiedMessageId,
+  agent,
+  finalReportWithCitations,
+  processedEvents,
+  websiteCount,
+  isLoading,
+}: AiMessageBubbleProps): React.JSX.Element => {
+  // Show ActivityTimeline if we have processedEvents (this will be the first AI message)
+  const shouldShowTimeline = processedEvents.length > 0;
+
+  // Condition for DIRECT DISPLAY (interactive_planner_agent OR final report)
+  const shouldDisplayDirectly =
+    agent === "interactive_planner_agent" ||
+    (agent === "report_composer_with_citations" && finalReportWithCitations);
+
+  if (shouldDisplayDirectly) {
+    // Direct display - show content with copy button, and timeline if available
+    return (
+      <div className="flex flex-col w-full max-w-[90%] space-y-4">
+        {/* Show timeline for interactive_planner_agent if available */}
+        {shouldShowTimeline && agent === "interactive_planner_agent" && (
+          <div className="w-full">
+            <ActivityTimeline
+              processedEvents={processedEvents}
+              isLoading={isLoading}
+              websiteCount={websiteCount}
+            />
+          </div>
+        )}
+
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
+            <Bot className="h-4 w-4 text-white" />
+          </div>
+
+          <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4 shadow-lg relative group">
+            <div className="prose prose-invert max-w-none">
+              <ReactMarkdown
+                components={mdComponents}
+                remarkPlugins={[remarkGfm]}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+
+            {/* Copy button */}
+            <button
+              onClick={() => handleCopy(message.content, message.id)}
+              className="absolute top-3 right-3 p-2 hover:bg-slate-700/50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              title="Copy message"
+            >
+              {copiedMessageId === message.id ? (
+                <CopyCheck className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <Copy className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+              )}
+            </button>
+
+            {/* Agent label */}
+            {agent && (
+              <div className="mt-3 pt-2 border-t border-slate-700/50">
+                <span className="text-xs text-slate-400 font-medium">
+                  Agent:{" "}
+                  {agent
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (l) => l.toUpperCase())}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Timeline-only display for other agents
+  if (shouldShowTimeline) {
+    return (
+      <div className="w-full max-w-[90%] flex items-start gap-3">
+        <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
+          <Bot className="h-4 w-4 text-white" />
+        </div>
+        <div className="flex-1">
+          <ActivityTimeline
+            processedEvents={processedEvents}
+            isLoading={isLoading}
+            websiteCount={websiteCount}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Default display (empty message or no special conditions)
+  return (
+    <div className="flex items-start gap-3 max-w-[90%]">
+      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
+        <Bot className="h-4 w-4 text-white" />
+      </div>
+      <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
+        {isLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+        )}
+        <span className="text-sm text-slate-400">
+          {isLoading ? "Processing..." : "No content"}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export function ChatMessagesView({
+  messages,
+  isLoading,
+  scrollAreaRef,
+  onSubmit,
+  onCancel,
+  messageEvents,
+  websiteCount,
+}: ChatMessagesViewProps): React.JSX.Element {
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  const handleCopy = async (text: string, messageId: string): Promise<void> => {
+    await navigator.clipboard.writeText(text);
+    setCopiedMessageId(messageId);
+    setTimeout(() => setCopiedMessageId(null), 2000);
+  };
+
+  const handleNewChat = (): void => {
+    window.location.reload();
+  };
+
+  // Find the ID of the last AI message
+  const lastAiMessage = messages
+    .slice()
+    .reverse()
+    .find((m) => m.type === "ai");
+  const lastAiMessageId = lastAiMessage?.id;
+
+  return (
+    <div className="flex flex-col h-full w-full relative">
+      {/* Fixed background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pointer-events-none"></div>
+
+      {/* Fixed Header */}
+      <div className="relative z-10 flex-shrink-0 border-b border-slate-700/50 bg-slate-800/80 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md">
+              <Bot className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-100">
+                AI Assistant
+              </h1>
+              <p className="text-xs text-slate-400">Powered by Google Gemini</p>
+            </div>
+          </div>
+          <Button
+            onClick={handleNewChat}
+            variant="outline"
+            className="bg-slate-700/50 hover:bg-slate-700 text-slate-200 border-slate-600/50 hover:border-slate-500 transition-colors"
+          >
+            New Chat
+          </Button>
+        </div>
+      </div>
+
+      {/* Scrollable Messages Area */}
+      <div className="relative z-10 flex-1 overflow-hidden">
+        <ScrollArea ref={scrollAreaRef} className="h-full">
+          <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto min-h-full">
+            {messages.map((message) => {
+              const eventsForMessage =
+                message.type === "ai"
+                  ? messageEvents.get(message.id) || []
+                  : [];
+
+              // Determine if the current AI message is the last one
+              const isCurrentMessageTheLastAiMessage =
+                message.type === "ai" && message.id === lastAiMessageId;
+
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    message.type === "human" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  {message.type === "human" ? (
+                    <HumanMessageBubble
+                      message={message}
+                      mdComponents={mdComponents}
+                    />
+                  ) : (
+                    <AiMessageBubble
+                      message={message}
+                      mdComponents={mdComponents}
+                      handleCopy={handleCopy}
+                      copiedMessageId={copiedMessageId}
+                      agent={message.agent}
+                      finalReportWithCitations={
+                        message.finalReportWithCitations
+                      }
+                      processedEvents={eventsForMessage}
+                      // Pass websiteCount only if it's the last AI message
+                      websiteCount={
+                        isCurrentMessageTheLastAiMessage ? websiteCount : 0
+                      }
+                      // Pass isLoading only if it's the last AI message and global isLoading is true
+                      isLoading={isCurrentMessageTheLastAiMessage && isLoading}
+                    />
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Global "Thinking..." indicator appears below all messages if isLoading is true */}
+            {isLoading &&
+              !lastAiMessage &&
+              messages.some((m) => m.type === "human") && (
+                <div className="flex justify-start">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
+                      <Bot className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+                      <span className="text-sm text-slate-400">
+                        Thinking...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Show "Thinking..." if the last message is human and we are loading */}
+            {isLoading &&
+              messages.length > 0 &&
+              messages[messages.length - 1].type === "human" && (
+                <div className="flex justify-start">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
+                      <Bot className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+                      <span className="text-sm text-slate-400">
+                        Thinking...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Fixed Input Area */}
+      <div className="relative z-10 flex-shrink-0 border-t-2 border-slate-600/80 bg-slate-900/95 backdrop-blur-md shadow-2xl shadow-black/40">
+        <div className="max-w-4xl mx-auto p-4 pt-5">
+          <InputForm onSubmit={onSubmit} isLoading={isLoading} context="chat" />
+          {isLoading && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={onCancel}
+                className="text-red-400 hover:text-red-300 border-red-400/30 hover:border-red-400/50 bg-red-950/20 hover:bg-red-950/30"
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
