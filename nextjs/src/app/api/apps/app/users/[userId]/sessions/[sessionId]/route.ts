@@ -44,10 +44,11 @@ export async function POST(
       });
     } else {
       // For regular backend deployment (local or Cloud Run)
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          ...getAuthHeaders(),
+          ...authHeaders,
           // Forward any authentication headers if present
           ...(request.headers.get("authorization") && {
             authorization: request.headers.get("authorization")!,
