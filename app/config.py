@@ -1,97 +1,241 @@
-# Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+Configuration for ADK Agent Engine Deployment
+
+This file handles all configuration needed to deploy your agent to Google Cloud.
+"""
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-
-    # Load .env file from the app directory
-    env_path = Path(__file__).parent / ".env"
-    load_dotenv(env_path)
-except ImportError:
-    print(
-        "Info: python-dotenv not installed. Environment variables should be set manually."
-    )
-
 import google.auth
-
-# RECOMMENDED DEPLOYMENT: Use Agent Engine with ADK CLI
-# Deploy with: adk deploy agent_engine app
-# Prerequisites: Set up .env file with GOOGLE_CLOUD_STAGING_BUCKET
-# This provides managed infrastructure, session handling, and enterprise features
-# Configuration is loaded from .env file
-# Copy .env.example to .env and fill in your values
-# Initialize Vertex AI for ADK agent deployment
 import vertexai
 
-try:
-    # Get project from environment or gcloud default
-    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if not project_id:
-        # Fallback to gcloud default
-        _, project_id = google.auth.default()
+# =============================================================================
+# STEP 1: Load Environment Variables
+# =============================================================================
 
-    location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-    staging_bucket = os.environ.get("GOOGLE_CLOUD_STAGING_BUCKET")
 
-    if project_id:
-        # Initialize Vertex AI with the project and location
-        # Set staging bucket for Agent Engine deployment if provided
-        init_params = {"project": project_id, "location": location}
-        if staging_bucket:
-            init_params["staging_bucket"] = staging_bucket
+def load_environment_variables() -> None:
+    """Load environment variables from .env file if it exists."""
+    try:
+        from dotenv import load_dotenv
 
-        vertexai.init(**init_params)
-        print(
-            f"✓ Vertex AI initialized for project: {project_id}, location: {location}"
-        )
-        if staging_bucket:
-            print(f"✓ Staging bucket configured: {staging_bucket}")
+        env_file = Path(__file__).parent / ".env"
+        if env_file.exists():
+            load_dotenv(env_file)
+            print(f"✅ Loaded environment variables from {env_file}")
         else:
-            print(
-                "Note: No staging bucket set. Add GOOGLE_CLOUD_STAGING_BUCKET to .env for Agent Engine deployment"
-            )
-    else:
-        print(
-            "Warning: GOOGLE_CLOUD_PROJECT not set and could not get from gcloud default"
-        )
+            print(f"ℹ️  No .env file found at {env_file}")
+    except ImportError:
+        print("ℹ️  python-dotenv not installed, skipping .env file loading")
 
-except Exception as e:
-    print(f"Warning: Could not initialize Vertex AI: {e}")
-    print("Make sure you have:")
-    print("1. Created .env file from .env.example with GOOGLE_CLOUD_PROJECT")
-    print("2. Authenticated with 'gcloud auth application-default login'")
-    print("3. Set default project with 'gcloud config set project YOUR_PROJECT_ID'")
+
+# =============================================================================
+# STEP 2: Basic Configuration
+# =============================================================================
 
 
 @dataclass
-class ResearchConfiguration:
-    """Configuration for research-related models and parameters.
+class AgentConfiguration:
+    """Main configuration for your agent."""
 
-    Attributes:
-        critic_model (str): Model for evaluation tasks.
-        worker_model (str): Model for working/generation tasks.
-        max_search_iterations (int): Maximum search iterations allowed.
+    # The AI model to use (you can change this if needed)
+    model: str = os.environ.get("MODEL", "gemini-2.5-flash")
+
+    # Deployment name (can have hyphens, used for display in Agent Engine)
+    deployment_name: str = os.environ.get("AGENT_NAME", "goal-planning-agent")
+
+    # Google Cloud settings
+    project_id: str | None = None
+    location: str = "us-central1"
+    staging_bucket: str | None = None
+
+    def __post_init__(self) -> None:
+        """Load environment variables and validate required settings."""
+
+        # Load environment variables first
+        load_environment_variables()
+
+        # Validate and set project_id
+        self.project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if not self.project_id:
+            # Try fallback to gcloud default
+            try:
+                _, self.project_id = google.auth.default()
+            except Exception:
+                pass
+
+        if not self.project_id:
+            raise ValueError(
+                "❌ Missing GOOGLE_CLOUD_PROJECT environment variable!\n"
+                "Please set it in your .env file or run:\n"
+                "  gcloud config set project YOUR_PROJECT_ID"
+            )
+
+        # Set location (with validation)
+        self.location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        if not self.location:
+            raise ValueError(
+                "❌ Missing GOOGLE_CLOUD_LOCATION environment variable!\n"
+                "Please set it in your .env file (e.g., 'us-central1')"
+            )
+
+        # Set staging bucket (required for Agent Engine deployment)
+        self.staging_bucket = os.environ.get("GOOGLE_CLOUD_STAGING_BUCKET")
+        if not self.staging_bucket:
+            print(
+                "⚠️  Warning: GOOGLE_CLOUD_STAGING_BUCKET not set!\n"
+                "   This is required for Agent Engine deployment.\n"
+                "   Please add it to your .env file."
+            )
+
+    @property
+    def internal_agent_name(self) -> str:
+        """
+        Convert deployment name to a valid Python identifier.
+
+        Replaces hyphens with underscores and ensures it's a valid identifier.
+        """
+        # Convert hyphens to underscores and make it a valid identifier
+        name = self.deployment_name.replace("-", "_")
+
+        # Ensure it starts with a letter or underscore
+        if not name[0].isalpha() and name[0] != "_":
+            name = f"agent_{name}"
+
+        return name
+
+
+@dataclass
+class DeploymentConfiguration:
+    """Configuration needed for deployment to Agent Engine."""
+
+    project: str
+    location: str
+    agent_name: str
+    requirements_file: str
+    extra_packages: list[str]
+    staging_bucket: str | None
+
+
+# =============================================================================
+# STEP 3: Initialize Configuration
+# =============================================================================
+
+
+def initialize_vertex_ai(config: AgentConfiguration) -> None:
+    """Initialize Vertex AI with the provided configuration."""
+    try:
+        print("\n🔧 Initializing Vertex AI...")
+        print(f"  Project: {config.project_id}")
+        print(f"  Location: {config.location}")
+        print(f"  Staging Bucket: {config.staging_bucket or 'Not set'}")
+
+        # Initialize Vertex AI (config values already validated in __post_init__)
+        if config.staging_bucket:
+            vertexai.init(
+                project=config.project_id,
+                location=config.location,
+                staging_bucket=config.staging_bucket,
+            )
+        else:
+            vertexai.init(project=config.project_id, location=config.location)
+
+        print(f"✅ Vertex AI initialized successfully!")
+
+        if not config.staging_bucket:
+            print(
+                "ℹ️  Add GOOGLE_CLOUD_STAGING_BUCKET to .env for Agent Engine deployment"
+            )
+
+    except Exception as e:
+        print(f"❌ Failed to initialize Vertex AI: {e}")
+        print("\n🔧 Setup checklist:")
+        print("  1. Set GOOGLE_CLOUD_PROJECT in .env file")
+        print("  2. Run: gcloud auth application-default login")
+        print("  3. Run: gcloud config set project YOUR_PROJECT_ID")
+        print("  4. Enable required APIs in Google Cloud Console")
+
+
+def get_deployment_config() -> DeploymentConfiguration:
     """
+    Get deployment configuration with validation.
 
-    critic_model: str = "gemini-2.5-pro"
-    worker_model: str = "gemini-2.5-flash"
-    max_search_iterations: int = 5
+    This function validates all required settings before deployment.
+    """
+    # Use validated config values (already checked in __post_init__)
+    project_id = config.project_id
+    if not project_id:
+        raise ValueError(
+            "❌ Project ID validation failed. This should not happen after __post_init__."
+        )
+
+    # Use centralized agent name from config
+    agent_name = config.deployment_name
+    if not agent_name:
+        raise ValueError(
+            "❌ Missing agent name. Please set AGENT_NAME in .env file (e.g., 'my-research-agent')"
+        )
+
+    # Check requirements file exists
+    requirements_file = os.environ.get("REQUIREMENTS_FILE", ".requirements.txt")
+    if not Path(requirements_file).exists():
+        raise ValueError(
+            f"❌ Requirements file not found: {requirements_file}\n"
+            "Please run 'uv export > .requirements.txt' to generate it"
+        )
+
+    # Parse extra packages (code to include in deployment)
+    extra_packages_str = os.environ.get("EXTRA_PACKAGES", "./app")
+    extra_packages = [
+        pkg.strip() for pkg in extra_packages_str.split(",") if pkg.strip()
+    ]
+
+    if not extra_packages:
+        raise ValueError(
+            "❌ No extra packages specified. Please set EXTRA_PACKAGES in .env file "
+            "or ensure './app' directory exists"
+        )
+
+    # Validate staging bucket is set for deployment
+    if not config.staging_bucket:
+        raise ValueError(
+            "❌ Missing GOOGLE_CLOUD_STAGING_BUCKET environment variable!\n"
+            "This is required for Agent Engine deployment.\n"
+            "Please add it to your .env file."
+        )
+
+    return DeploymentConfiguration(
+        project=project_id,
+        location=config.location,
+        agent_name=agent_name,
+        requirements_file=requirements_file,
+        extra_packages=extra_packages,
+        staging_bucket=config.staging_bucket,
+    )
 
 
-config = ResearchConfiguration()
+def get_project_id() -> str | None:
+    """Get project ID from config (already validated in __post_init__)."""
+    return config.project_id
+
+
+# =============================================================================
+# STEP 4: Initialize Everything
+# =============================================================================
+
+# Create main configuration (this will now load .env and validate)
+config = AgentConfiguration()
+
+# Initialize Vertex AI
+initialize_vertex_ai(config)
+
+# Print summary
+print("\n📋 Configuration Summary:")
+print(f"  Agent Name: {config.deployment_name}")
+print(f"  Internal Name: {config.internal_agent_name}")
+print(f"  Model: {config.model}")
+print(f"  Project: {get_project_id()}")
+print(f"  Location: {config.location}")
+print("=" * 50)

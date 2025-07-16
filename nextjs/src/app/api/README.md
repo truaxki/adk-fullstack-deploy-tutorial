@@ -9,11 +9,11 @@ This directory contains API routes that proxy requests to the Python backend ser
   - Creates a new chat session
   - Proxies to: `{BACKEND_URL}/apps/app/users/{userId}/sessions/{sessionId}`
 
-### Health Check
-- **GET** `/api/docs`
-  - Backend health check endpoint
-  - Proxies to: `{BACKEND_URL}/docs`
-  - Used to verify backend availability
+### Goal Planning
+- **POST** `/api/goal-planning`
+  - Main goal planning endpoint
+  - Proxies to: `{BACKEND_URL}/run` (for ADK backend)
+  - Handles goal input and returns structured planning response
 
 ### Chat Streaming
 - **POST** `/api/run_sse`
@@ -37,13 +37,13 @@ If not set, defaults to `http://127.0.0.1:8000`.
 2. The Next.js development server will proxy API requests automatically
 3. All routes include proper error handling and CORS headers
 
-## API Utilities
+## Configuration System
 
-The `/src/lib/api.ts` file provides utility functions for:
-- Session creation with retry logic
-- Backend health checking
-- Chat message streaming
-- Exponential backoff retry mechanisms
+The `/src/lib/config.ts` file provides:
+- Environment detection (local, Agent Engine, Cloud Run)
+- Dynamic endpoint configuration
+- Authentication header management
+- Deployment-specific routing
 
 ## Error Handling
 

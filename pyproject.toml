@@ -1,5 +1,5 @@
 [project]
-name = "gemini-fullstack"
+name = "adk-fullstack"
 version = "0.1.0"
 description = ""
 authors = [
@@ -11,7 +11,7 @@ authors = [
     {name = "Brandon Hancock", email = "brandon@brandonhancock.io"},
 ]
 dependencies = [
-    "google-adk==1.4.2",
+    "google-adk==1.6.1",
     "python-dotenv",  
 ]
 

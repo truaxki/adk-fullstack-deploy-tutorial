@@ -78,13 +78,9 @@ nextjs/build/
 
 # Environment variables
 .env
-.env*
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Logs
+logs/
 logs
 *.log
 
@@ -225,6 +221,7 @@ docker-compose.override.yml
 .local/
 local/
 .tmp/
+.requirements.txt
 
 # AI/ML artifacts
 *.model

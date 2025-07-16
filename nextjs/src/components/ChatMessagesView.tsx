@@ -1,34 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { InputForm } from "@/components/InputForm";
 import {
-  ActivityTimeline,
+  Copy,
+  CopyCheck,
+  Loader2,
+  Bot,
+  User,
+  Target,
+  ListChecks,
+  CheckCircle,
+} from "lucide-react";
+import { Message } from "@/types";
+import {
   ProcessedEvent,
+  ActivityTimeline,
 } from "@/components/ActivityTimeline";
-import { Copy, CopyCheck, Loader2, Bot, User } from "lucide-react";
-
-// Message types
-export interface MessageWithAgent {
-  type: "human" | "ai";
-  content: string;
-  id: string;
-  agent?: string;
-  finalReportWithCitations?: boolean;
-}
 
 interface ChatMessagesViewProps {
-  messages: MessageWithAgent[];
+  messages: Message[];
   isLoading: boolean;
-  scrollAreaRef: React.RefObject<HTMLDivElement>;
+  scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (query: string) => void;
   onCancel: () => void;
-  messageEvents: Map<string, ProcessedEvent[]>;
-  websiteCount: number;
+  sessionId: string;
+  onSessionIdChange: (sessionId: string) => void;
+  onLoadSession?: (sessionId: string) => void;
+  displayData?: string | null;
+  messageEvents?: Map<string, ProcessedEvent[]>;
+  websiteCount?: number;
 }
 
 // Enhanced markdown components for better styling
@@ -179,7 +184,7 @@ const mdComponents: Partial<Components> = {
 
 // Human message bubble component with enhanced styling
 interface HumanMessageBubbleProps {
-  message: MessageWithAgent;
+  message: Message;
   mdComponents: typeof mdComponents;
 }
 
@@ -248,15 +253,13 @@ const HumanMessageBubble = ({
 
 // AI message bubble component with enhanced styling
 interface AiMessageBubbleProps {
-  message: MessageWithAgent;
+  message: Message;
   mdComponents: typeof mdComponents;
   handleCopy: (text: string, messageId: string) => void;
   copiedMessageId: string | null;
-  agent?: string;
-  finalReportWithCitations?: boolean;
-  processedEvents: ProcessedEvent[];
-  websiteCount: number;
   isLoading: boolean;
+  messageEvents?: Map<string, ProcessedEvent[]>;
+  websiteCount?: number;
 }
 
 const AiMessageBubble = ({
@@ -264,111 +267,127 @@ const AiMessageBubble = ({
   mdComponents,
   handleCopy,
   copiedMessageId,
-  agent,
-  finalReportWithCitations,
-  processedEvents,
-  websiteCount,
   isLoading,
+  messageEvents,
+  websiteCount,
 }: AiMessageBubbleProps): React.JSX.Element => {
-  // Show ActivityTimeline if we have processedEvents (this will be the first AI message)
-  const shouldShowTimeline = processedEvents.length > 0;
+  // Check if we have timeline events to show
+  const hasTimelineEvents =
+    messageEvents &&
+    messageEvents.has(message.id) &&
+    messageEvents.get(message.id)!.length > 0;
 
-  // Condition for DIRECT DISPLAY (interactive_planner_agent OR final report)
-  const shouldDisplayDirectly =
-    agent === "interactive_planner_agent" ||
-    (agent === "report_composer_with_citations" && finalReportWithCitations);
-
-  if (shouldDisplayDirectly) {
-    // Direct display - show content with copy button, and timeline if available
+  // If message has no content and is loading, show thinking indicator with timeline
+  if (!message.content && isLoading) {
     return (
-      <div className="flex flex-col w-full max-w-[90%] space-y-4">
-        {/* Show timeline for interactive_planner_agent if available */}
-        {shouldShowTimeline && agent === "interactive_planner_agent" && (
-          <div className="w-full">
-            <ActivityTimeline
-              processedEvents={processedEvents}
-              isLoading={isLoading}
-              websiteCount={websiteCount}
-            />
-          </div>
-        )}
+      <div className="flex items-start gap-3 max-w-[90%]">
+        <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
+          <Bot className="h-4 w-4 text-white" />
+        </div>
 
-        <div className="flex items-start gap-3">
+        <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4 shadow-lg">
+          {/* Activity Timeline during thinking */}
+          {hasTimelineEvents && (
+            <ActivityTimeline
+              processedEvents={messageEvents.get(message.id) || []}
+              isLoading={isLoading}
+              websiteCount={websiteCount || 0}
+            />
+          )}
+
+          {/* Loading indicator */}
+          <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
+            <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+            <span className="text-sm text-slate-400">
+              Planning your goal...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If message has no content and not loading, show timeline if available
+  if (!message.content) {
+    // If we have timeline events, show them even without content
+    if (hasTimelineEvents) {
+      return (
+        <div className="flex items-start gap-3 max-w-[90%]">
           <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
             <Bot className="h-4 w-4 text-white" />
           </div>
 
-          <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4 shadow-lg relative group">
-            <div className="prose prose-invert max-w-none">
-              <ReactMarkdown
-                components={mdComponents}
-                remarkPlugins={[remarkGfm]}
-              >
-                {message.content}
-              </ReactMarkdown>
+          <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4 shadow-lg">
+            <ActivityTimeline
+              processedEvents={messageEvents.get(message.id) || []}
+              isLoading={isLoading}
+              websiteCount={websiteCount || 0}
+            />
+
+            {/* Show processing indicator */}
+            <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 mt-2">
+              <span className="text-sm text-slate-400">Processing...</span>
             </div>
-
-            {/* Copy button */}
-            <button
-              onClick={() => handleCopy(message.content, message.id)}
-              className="absolute top-3 right-3 p-2 hover:bg-slate-700/50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-              title="Copy message"
-            >
-              {copiedMessageId === message.id ? (
-                <CopyCheck className="h-4 w-4 text-emerald-400" />
-              ) : (
-                <Copy className="h-4 w-4 text-slate-400 hover:text-slate-300" />
-              )}
-            </button>
-
-            {/* Agent label */}
-            {agent && (
-              <div className="mt-3 pt-2 border-t border-slate-700/50">
-                <span className="text-xs text-slate-400 font-medium">
-                  Agent:{" "}
-                  {agent
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (l) => l.toUpperCase())}
-                </span>
-              </div>
-            )}
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Timeline-only display for other agents
-  if (shouldShowTimeline) {
+    // Otherwise show no content indicator
     return (
-      <div className="w-full max-w-[90%] flex items-start gap-3">
+      <div className="flex items-start gap-3 max-w-[90%]">
         <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
           <Bot className="h-4 w-4 text-white" />
         </div>
-        <div className="flex-1">
-          <ActivityTimeline
-            processedEvents={processedEvents}
-            isLoading={isLoading}
-            websiteCount={websiteCount}
-          />
+        <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
+          <span className="text-sm text-slate-400">No content</span>
         </div>
       </div>
     );
   }
 
-  // Default display (empty message or no special conditions)
+  // Regular message display
   return (
     <div className="flex items-start gap-3 max-w-[90%]">
       <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
         <Bot className="h-4 w-4 text-white" />
       </div>
-      <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
-        {isLoading && (
-          <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+
+      <div className="flex-1 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4 shadow-lg relative group">
+        {/* Activity Timeline */}
+        {messageEvents && messageEvents.has(message.id) && (
+          <ActivityTimeline
+            processedEvents={messageEvents.get(message.id) || []}
+            isLoading={isLoading}
+            websiteCount={websiteCount || 0}
+          />
         )}
-        <span className="text-sm text-slate-400">
-          {isLoading ? "Processing..." : "No content"}
-        </span>
+
+        <div className="prose prose-invert max-w-none">
+          <ReactMarkdown components={mdComponents} remarkPlugins={[remarkGfm]}>
+            {message.content}
+          </ReactMarkdown>
+        </div>
+
+        {/* Copy button */}
+        <button
+          onClick={() => handleCopy(message.content, message.id)}
+          className="absolute top-3 right-3 p-2 hover:bg-slate-700/50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+          title="Copy message"
+        >
+          {copiedMessageId === message.id ? (
+            <CopyCheck className="h-4 w-4 text-emerald-400" />
+          ) : (
+            <Copy className="h-4 w-4 text-slate-400 hover:text-slate-300" />
+          )}
+        </button>
+
+        {/* Timestamp */}
+        <div className="mt-3 pt-2 border-t border-slate-700/50">
+          <span className="text-xs text-slate-400">
+            {message.timestamp.toLocaleTimeString()}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -380,10 +399,19 @@ export function ChatMessagesView({
   scrollAreaRef,
   onSubmit,
   onCancel,
+  sessionId,
+  onSessionIdChange,
+  onLoadSession,
   messageEvents,
   websiteCount,
 }: ChatMessagesViewProps): React.JSX.Element {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isEditingSessionId, setIsEditingSessionId] = useState(false);
+  const [tempSessionId, setTempSessionId] = useState(sessionId);
+
+  useEffect(() => {
+    setTempSessionId(sessionId);
+  }, [sessionId]);
 
   const handleCopy = async (text: string, messageId: string): Promise<void> => {
     await navigator.clipboard.writeText(text);
@@ -392,7 +420,35 @@ export function ChatMessagesView({
   };
 
   const handleNewChat = (): void => {
-    window.location.reload();
+    const newSessionId = crypto.randomUUID();
+    onSessionIdChange(newSessionId);
+    onLoadSession?.(newSessionId);
+  };
+
+  const handleSessionIdEdit = (): void => {
+    setTempSessionId(sessionId);
+    setIsEditingSessionId(true);
+  };
+
+  const handleSessionIdSave = (): void => {
+    if (tempSessionId.trim()) {
+      onSessionIdChange(tempSessionId.trim());
+      onLoadSession?.(tempSessionId.trim());
+    }
+    setIsEditingSessionId(false);
+  };
+
+  const handleSessionIdCancel = (): void => {
+    setTempSessionId(sessionId);
+    setIsEditingSessionId(false);
+  };
+
+  const handleSessionIdKeyPress = (e: React.KeyboardEvent): void => {
+    if (e.key === "Enter") {
+      handleSessionIdSave();
+    } else if (e.key === "Escape") {
+      handleSessionIdCancel();
+    }
   };
 
   // Find the ID of the last AI message
@@ -416,18 +472,63 @@ export function ChatMessagesView({
             </div>
             <div>
               <h1 className="text-lg font-semibold text-slate-100">
-                AI Assistant
+                Goal Planning Assistant
               </h1>
               <p className="text-xs text-slate-400">Powered by Google Gemini</p>
             </div>
           </div>
-          <Button
-            onClick={handleNewChat}
-            variant="outline"
-            className="bg-slate-700/50 hover:bg-slate-700 text-slate-200 border-slate-600/50 hover:border-slate-500 transition-colors"
-          >
-            New Chat
-          </Button>
+
+          <div className="flex items-center gap-4">
+            {/* Session ID Display/Edit */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Session:</span>
+              {isEditingSessionId ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={tempSessionId}
+                    onChange={(e) => setTempSessionId(e.target.value)}
+                    onKeyDown={handleSessionIdKeyPress}
+                    className="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:border-emerald-500 focus:outline-none w-64"
+                    placeholder="Enter session ID..."
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSessionIdSave}
+                    className="text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleSessionIdCancel}
+                    className="text-xs text-slate-400 hover:text-slate-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-300 font-mono bg-slate-700/50 px-2 py-1 rounded">
+                    {sessionId || "No session"}
+                  </span>
+                  <button
+                    onClick={handleSessionIdEdit}
+                    className="text-xs text-slate-400 hover:text-slate-300"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Button
+              onClick={handleNewChat}
+              variant="outline"
+              className="bg-slate-700/50 hover:bg-slate-700 text-slate-200 border-slate-600/50 hover:border-slate-500 transition-colors"
+            >
+              New Chat
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -435,71 +536,135 @@ export function ChatMessagesView({
       <div className="relative z-10 flex-1 overflow-hidden">
         <ScrollArea ref={scrollAreaRef} className="h-full">
           <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto min-h-full">
-            {messages.map((message) => {
-              const eventsForMessage =
-                message.type === "ai"
-                  ? messageEvents.get(message.id) || []
-                  : [];
-
-              // Determine if the current AI message is the last one
-              const isCurrentMessageTheLastAiMessage =
-                message.type === "ai" && message.id === lastAiMessageId;
-
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.type === "human" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  {message.type === "human" ? (
-                    <HumanMessageBubble
-                      message={message}
-                      mdComponents={mdComponents}
-                    />
-                  ) : (
-                    <AiMessageBubble
-                      message={message}
-                      mdComponents={mdComponents}
-                      handleCopy={handleCopy}
-                      copiedMessageId={copiedMessageId}
-                      agent={message.agent}
-                      finalReportWithCitations={
-                        message.finalReportWithCitations
-                      }
-                      processedEvents={eventsForMessage}
-                      // Pass websiteCount only if it's the last AI message
-                      websiteCount={
-                        isCurrentMessageTheLastAiMessage ? websiteCount : 0
-                      }
-                      // Pass isLoading only if it's the last AI message and global isLoading is true
-                      isLoading={isCurrentMessageTheLastAiMessage && isLoading}
-                    />
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Global "Thinking..." indicator appears below all messages if isLoading is true */}
-            {isLoading &&
-              !lastAiMessage &&
-              messages.some((m) => m.type === "human") && (
-                <div className="flex justify-start">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
-                      <Bot className="h-4 w-4 text-white" />
+            {messages.length === 0 ? (
+              /* AI Goal Planner Placeholder */
+              <div className="flex-1 flex flex-col items-center justify-center p-4 text-center min-h-[60vh]">
+                <div className="max-w-4xl w-full space-y-8">
+                  {/* Main header */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center space-x-3">
+                      <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
+                        <Target className="w-6 h-6 text-green-500" />
+                      </div>
+                      <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                        <ListChecks className="w-6 h-6 text-blue-500" />
+                      </div>
+                      <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center">
+                        <CheckCircle className="w-6 h-6 text-purple-500" />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
-                      <span className="text-sm text-slate-400">
-                        Thinking...
+                    <h1 className="text-4xl font-bold text-white">
+                      AI Goal Planner
+                    </h1>
+                    <p className="text-xl text-neutral-300">
+                      Powered by Google Gemini
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-4">
+                    <p className="text-lg text-neutral-400 max-w-2xl mx-auto">
+                      Transform your goals into actionable plans with structured
+                      task breakdown, clear priorities, and step-by-step
+                      guidance to achieve success.
+                    </p>
+                  </div>
+
+                  {/* Feature highlights */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+                    <div className="space-y-3">
+                      <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mx-auto">
+                        <Target className="w-6 h-6 text-green-500" />
+                      </div>
+                      <h3 className="font-semibold text-green-400">
+                        Goal Planning
+                      </h3>
+                      <p className="text-sm text-neutral-400">
+                        Strategic breakdown and clear roadmap creation
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mx-auto">
+                        <ListChecks className="w-6 h-6 text-blue-500" />
+                      </div>
+                      <h3 className="font-semibold text-blue-400">
+                        Task Breakdown
+                      </h3>
+                      <p className="text-sm text-neutral-400">
+                        Organized tasks and subtasks with priorities
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mx-auto">
+                        <CheckCircle className="w-6 h-6 text-purple-500" />
+                      </div>
+                      <h3 className="font-semibold text-purple-400">
+                        Achievement Path
+                      </h3>
+                      <p className="text-sm text-neutral-400">
+                        Clear steps and milestones to reach your goals
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Try asking about section */}
+                  <div className="space-y-4">
+                    <p className="text-neutral-400">Try asking about:</p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <span className="px-3 py-1 bg-slate-700/50 text-slate-300 rounded-full text-sm">
+                        Goal setting strategies
+                      </span>
+                      <span className="px-3 py-1 bg-slate-700/50 text-slate-300 rounded-full text-sm">
+                        Project planning methods
+                      </span>
+                      <span className="px-3 py-1 bg-slate-700/50 text-slate-300 rounded-full text-sm">
+                        Task prioritization
+                      </span>
+                      <span className="px-3 py-1 bg-slate-700/50 text-slate-300 rounded-full text-sm">
+                        Achievement milestones
                       </span>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            ) : (
+              messages.map((message) => {
+                // Determine if the current AI message is the last one
+                const isCurrentMessageTheLastAiMessage =
+                  message.type === "ai" && message.id === lastAiMessageId;
 
-            {/* Show "Thinking..." if the last message is human and we are loading */}
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex ${
+                      message.type === "human" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    {message.type === "human" ? (
+                      <HumanMessageBubble
+                        message={message}
+                        mdComponents={mdComponents}
+                      />
+                    ) : (
+                      <AiMessageBubble
+                        message={message}
+                        mdComponents={mdComponents}
+                        handleCopy={handleCopy}
+                        copiedMessageId={copiedMessageId}
+                        // Pass isLoading only if it's the last AI message and global isLoading is true
+                        isLoading={
+                          isCurrentMessageTheLastAiMessage && isLoading
+                        }
+                        messageEvents={messageEvents}
+                        websiteCount={websiteCount}
+                      />
+                    )}
+                  </div>
+                );
+              })
+            )}
+
+            {/* Show "Planning..." if the last message is human and we are loading */}
             {isLoading &&
               messages.length > 0 &&
               messages[messages.length - 1].type === "human" && (
@@ -511,7 +676,7 @@ export function ChatMessagesView({
                     <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
                       <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
                       <span className="text-sm text-slate-400">
-                        Thinking...
+                        Planning your goal...
                       </span>
                     </div>
                   </div>

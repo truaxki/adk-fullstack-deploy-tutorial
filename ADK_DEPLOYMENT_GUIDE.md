@@ -19,7 +19,7 @@ Agent Engine deployment requires 5 APIs to be enabled. **You must enable each AP
 
 1. Go to [APIs & Services → Library](https://console.cloud.google.com/apis/library)
 2. Search for and enable each API by clicking "Enable":
-   - **Vertex AI API** - For AI models and Agent Engine
+   - **Vertex AI API** - For AI models and Agent Engine. Click enable all recommended services to speed up the process.
    - **Cloud Storage API** - For staging bucket  
    - **Cloud Build API** - For building agent containers
    - **Cloud Run Admin API** - For deployment infrastructure
@@ -60,7 +60,7 @@ You need a Cloud Storage bucket for staging deployment artifacts:
    - **Access Control**: Uniform (recommended)
    - **Protection Tools**: Use defaults
 4. Click **Create**
-5. **Save the bucket name** - you'll need it for your `.env` file
+5. **Save the bucket name** - Update GOOGLE_CLOUD_STORAGE_BUCKET in your .env file.
 
 ### 3. Authentication Setup
 Install Google Cloud CLI and authenticate:
@@ -91,39 +91,6 @@ cp app/.env.example app/.env
 
 # Edit app/.env with your values
 ```
-
-**If `app/.env.example` doesn't exist, create it with this content:**
-```bash
-# ADK Agent Environment Configuration
-# Copy this file to .env and fill in your values
-
-# Google Cloud Configuration
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-GOOGLE_CLOUD_STAGING_BUCKET=gs://your-project-id-agent-staging
-GOOGLE_GENAI_USE_VERTEXAI=True
-
-# Alternative: AI Studio Configuration (uncomment to use instead of Vertex AI)
-# GOOGLE_GENAI_USE_VERTEXAI=False
-# GOOGLE_API_KEY=your-ai-studio-api-key
-
-# Optional: Additional configuration
-# Add any other environment variables your agent needs here
-```
-
-Your `app/.env` file should contain:
-```bash
-# Google Cloud Configuration
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-GOOGLE_CLOUD_STAGING_BUCKET=gs://your-project-id-agent-staging
-GOOGLE_GENAI_USE_VERTEXAI=True
-
-# Alternative: AI Studio Configuration (uncomment to use instead of Vertex AI)
-# GOOGLE_GENAI_USE_VERTEXAI=False
-# GOOGLE_API_KEY=your-ai-studio-api-key
-```
-
 **Note:** If you've set your default project with `gcloud config set project`, the `GOOGLE_CLOUD_PROJECT` in `.env` is optional.
 
 ## ✅ Pre-Deployment Checklist
@@ -143,7 +110,7 @@ Before deploying your agent, verify you have completed:
 ### 3. Agent Structure
 Your ADK agent should follow this structure:
 ```
-your_agent/
+app/
 ├── __init__.py
 ├── agent.py           # Contains your agent definition
 ├── pyproject.toml     # Modern dependency management
@@ -159,19 +126,12 @@ Your `agent.py` should contain:
 ```python
 from google.adk.agents import Agent
 
-# Define your tools/functions
-def your_tool_function(param: str) -> dict:
-    """Tool description"""
-    # Your implementation
-    return {"result": "value"}
-
 # Define your agent
 root_agent = Agent(
     name="your_agent_name",
-    model="gemini-2.5-flash",  # or gemini-2.5-pro
+    model="gemini-2.5-flash", 
     description="Agent description",
     instruction="Agent instructions",
-    tools=[your_tool_function]
 )
 ```
 
@@ -192,7 +152,7 @@ Deploy your agent using the ADK CLI command:
 cd path/to/your/agent/
 
 # Simple deployment (everything configured via .env)
-adk deploy agent_engine app
+uv run adk deploy agent_engine app
 
 # With optional display parameters
 adk deploy agent_engine \
