@@ -49,10 +49,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       };
 
       // Forward the request to Agent Engine
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          ...getAuthHeaders(),
+          ...authHeaders,
+          "Content-Type": "application/json",
           // Forward any authentication headers if present
           ...(request.headers.get("authorization") && {
             authorization: request.headers.get("authorization")!,
@@ -107,10 +109,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     } else {
       // For regular backend deployment (local or Cloud Run)
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          ...getAuthHeaders(),
+          ...authHeaders,
           // Forward any authentication headers if present
           ...(request.headers.get("authorization") && {
             authorization: request.headers.get("authorization")!,

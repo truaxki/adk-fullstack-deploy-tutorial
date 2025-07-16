@@ -30,6 +30,7 @@ The frontend automatically detects which backend type to use based on available 
 # Google Cloud Configuration
 GOOGLE_CLOUD_PROJECT=your-project-id
 REASONING_ENGINE_ID=your-reasoning-engine-id
+GOOGLE_SERVICE_ACCOUNT_KEY_BASE64=your-base64-encoded-service-account-key
 
 # Optional (has defaults)
 GOOGLE_CLOUD_LOCATION=us-central1
@@ -45,6 +46,7 @@ AGENT_ENGINE_ENDPOINT=https://custom-agent-engine-endpoint
 1. **GOOGLE_CLOUD_PROJECT**: Your Google Cloud project ID
 2. **REASONING_ENGINE_ID**: From your ADK deployment output (e.g., `projects/123/locations/us-central1/reasoningEngines/abc123` → use `abc123`)
 3. **GOOGLE_CLOUD_LOCATION**: Region where you deployed your agent (default: `us-central1`)
+4. **GOOGLE_SERVICE_ACCOUNT_KEY_BASE64**: Base64-encoded service account key (see setup instructions below)
 
 ### 🌐 Cloud Run Backend
 
@@ -72,6 +74,140 @@ BACKEND_URL=http://127.0.0.1:8000
 # Optional (for development logging)
 NODE_ENV=development
 ```
+
+## Service Account Setup for Agent Engine
+
+If you're using Agent Engine backend, you need to create a Google Cloud service account and configure authentication. This is required for the frontend to authenticate with Google Cloud's Vertex AI API.
+
+### Step 1: Create Service Account
+
+1. **Go to Google Cloud Console:**
+   - Navigate to [Google Cloud Console](https://console.cloud.google.com)
+   - Select your project (the same one where you deployed your ADK agent)
+
+2. **Navigate to Service Accounts:**
+   - Go to **IAM & Admin** → **Service Accounts**
+   - Click **"Create Service Account"**
+
+3. **Configure Service Account:**
+   - **Service account name**: `agent-engine-frontend` (or any descriptive name)
+   - **Service account ID**: Will be auto-generated
+   - **Description**: `Service account for frontend to access Agent Engine`
+   - Click **"Create and Continue"**
+
+4. **Add Required Roles:**
+   Add these roles to your service account:
+   - **Vertex AI User** (`roles/aiplatform.user`) - Required for Agent Engine API access
+   - **Service Account Token Creator** (`roles/iam.serviceAccountTokenCreator`) - Required for token generation
+   
+   Click **"Continue"** then **"Done"**
+
+### Step 2: Generate Service Account Key
+
+1. **Access Service Account:**
+   - In the Service Accounts list, click on the service account you just created
+   - Go to the **"Keys"** tab
+
+2. **Create New Key:**
+   - Click **"Add Key"** → **"Create new key"**
+   - Select **"JSON"** as the key type
+   - Click **"Create"**
+
+3. **Download Key:**
+   - The JSON key file will be automatically downloaded to your computer
+   - **Important**: Store this file securely and never commit it to version control
+
+### Step 3: Convert JSON Key to Base64
+
+You need to convert the JSON key to base64 for safe storage in environment variables.
+
+**Option A: Using Terminal/Command Line (Recommended)**
+
+```bash
+# On macOS/Linux
+cat path/to/your-service-account-key.json | base64
+
+# On Windows (PowerShell)
+[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content path/to/your-service-account-key.json -Raw)))
+```
+
+**Option B: Using Node.js**
+
+```javascript
+const fs = require('fs');
+const keyFile = fs.readFileSync('path/to/your-service-account-key.json', 'utf8');
+const base64Key = Buffer.from(keyFile).toString('base64');
+console.log(base64Key);
+```
+
+**Option C: Using Online Tool**
+
+1. Go to [base64encode.org](https://www.base64encode.org/)
+2. Copy the entire contents of your JSON key file
+3. Paste it into the encoder
+4. Copy the base64 output
+
+### Step 4: Add to Environment Variables
+
+**For Local Development:**
+Create a `.env.local` file in your `nextjs` directory:
+
+```bash
+# nextjs/.env.local
+GOOGLE_CLOUD_PROJECT=your-project-id
+REASONING_ENGINE_ID=your-reasoning-engine-id
+GOOGLE_SERVICE_ACCOUNT_KEY_BASE64=your-base64-encoded-key-here
+GOOGLE_CLOUD_LOCATION=us-central1
+NODE_ENV=development
+```
+
+**For Vercel Production:**
+1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables
+2. Add a new environment variable:
+   - **Name**: `GOOGLE_SERVICE_ACCOUNT_KEY_BASE64`
+   - **Value**: The base64 string you generated
+   - **Environments**: Select Production, Preview, and Development
+
+### Step 5: Verify Setup
+
+**Test Locally:**
+```bash
+cd nextjs
+npm run dev
+```
+
+Check the browser console for configuration output:
+```
+🔧 Endpoint Configuration:
+  environment: cloud
+  deploymentType: agent_engine
+  backendUrl: https://us-central1-aiplatform.googleapis.com/v1/...
+```
+
+**Test API Authentication:**
+Open your app and try to interact with the agent. If authentication is working, you should see successful responses. If you get 401 errors, double-check your service account permissions and base64 encoding.
+
+### Security Best Practices
+
+1. **Never commit service account keys to version control**
+2. **Use environment variables for all sensitive data**
+3. **Rotate service account keys regularly**
+4. **Use least privilege principle** - only grant necessary permissions
+5. **Monitor service account usage** in Google Cloud Console
+
+### Troubleshooting Authentication
+
+**Error: "GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 environment variable is required"**
+- Solution: Ensure the environment variable is set correctly in Vercel
+
+**Error: "Authentication failed" or "401 Unauthorized"**
+- Solution: Check that your service account has the correct roles
+- Solution: Verify the base64 encoding is correct
+- Solution: Ensure the service account key is valid and not expired
+
+**Error: "Failed to parse service account key"**
+- Solution: Check that the base64 string is complete and not truncated
+- Solution: Re-encode the JSON key file
 
 ## Deployment Methods
 
@@ -195,18 +331,27 @@ adk deploy agent_engine app
 # Example output: projects/my-project/locations/us-central1/reasoningEngines/abc123
 ```
 
-### Step 2: Configure Frontend Environment
+### Step 2: Set Up Authentication
+Follow the [Service Account Setup](#service-account-setup-for-agent-engine) section to:
+
+1. Create a service account in Google Cloud Console
+2. Download the JSON key file
+3. Convert the key to base64
+4. Store the base64 string securely
+
+### Step 3: Configure Frontend Environment
 Create a `.env.local` file in your `nextjs` directory for local testing:
 
 ```bash
 # nextjs/.env.local
 GOOGLE_CLOUD_PROJECT=my-ai-project-123456
 REASONING_ENGINE_ID=abc123def456
+GOOGLE_SERVICE_ACCOUNT_KEY_BASE64=your-base64-encoded-key-here
 GOOGLE_CLOUD_LOCATION=us-central1
 NODE_ENV=development
 ```
 
-### Step 3: Test Locally
+### Step 4: Test Locally
 ```bash
 cd nextjs
 npm run dev
@@ -214,7 +359,7 @@ npm run dev
 
 Visit `http://localhost:3000` and verify the frontend connects to your deployed agent.
 
-### Step 4: Deploy to Vercel
+### Step 5: Deploy to Vercel
 ```bash
 # Option A: Using Vercel CLI
 cd nextjs
@@ -227,13 +372,14 @@ vercel --prod
 # 4. Deploy
 ```
 
-### Step 5: Configure Production Environment Variables
+### Step 6: Configure Production Environment Variables
 In Vercel Dashboard → Project Settings → Environment Variables:
 
 | Variable | Value | Environment |
 |----------|-------|-------------|
 | `GOOGLE_CLOUD_PROJECT` | `my-ai-project-123456` | Production, Preview |
 | `REASONING_ENGINE_ID` | `abc123def456` | Production, Preview |
+| `GOOGLE_SERVICE_ACCOUNT_KEY_BASE64` | `your-base64-encoded-key` | Production, Preview |
 | `GOOGLE_CLOUD_LOCATION` | `us-central1` | Production, Preview |
 
 ## Frontend Configuration Details
@@ -366,6 +512,7 @@ Vercel creates preview deployments for pull requests:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `REASONING_ENGINE_ID` | Yes | - | Agent Engine reasoning engine ID |
+| `GOOGLE_SERVICE_ACCOUNT_KEY_BASE64` | Yes | - | Base64-encoded service account key for authentication |
 | `GOOGLE_CLOUD_LOCATION` | No | `us-central1` | Google Cloud region |
 | `AGENT_ENGINE_ENDPOINT` | No | Auto-constructed | Custom Agent Engine endpoint |
 

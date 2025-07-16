@@ -91,10 +91,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       const endpoint = getEndpointForPath("/run");
 
       // Forward the request to Agent Engine
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          ...getAuthHeaders(),
+          ...authHeaders,
           "Content-Type": "application/json",
           // Forward any authentication headers if present
           ...(request.headers.get("authorization") && {
@@ -162,10 +163,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
 
       try {
+        const sessionAuthHeaders = await getAuthHeaders();
         const sessionResponse = await fetch(sessionEndpoint, {
           method: "POST",
           headers: {
-            ...getAuthHeaders(),
+            ...sessionAuthHeaders,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({}),
@@ -203,10 +205,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       // Get the run endpoint
       const runEndpoint = getEndpointForPath("/run_sse");
 
+      const runAuthHeaders = await getAuthHeaders();
       const response = await fetch(runEndpoint, {
         method: "POST",
         headers: {
-          ...getAuthHeaders(),
+          ...runAuthHeaders,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(adkPayload),

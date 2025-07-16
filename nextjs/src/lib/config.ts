@@ -134,19 +134,50 @@ export const endpointConfig = createEndpointConfig();
 /**
  * Utility function to get authentication headers for Google Cloud API calls
  */
-export function getAuthHeaders(): Record<string, string> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  // In cloud environments, use service account authentication
-  if (endpointConfig.environment === "cloud") {
-    // Service account token will be automatically injected by the runtime
-    // For Agent Engine, we'll use the Google Cloud client libraries
-    return headers;
+  // For Agent Engine deployment, we need proper Google Cloud authentication
+  if (endpointConfig.deploymentType === "agent_engine") {
+    try {
+      // Use base64-encoded service account key from environment variables (for Vercel deployment)
+      const serviceAccountKeyBase64 =
+        process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64;
+
+      if (!serviceAccountKeyBase64) {
+        throw new Error(
+          "GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 environment variable is required for Agent Engine deployment"
+        );
+      }
+
+      // Decode the base64-encoded service account key
+      const serviceAccountKeyJson = Buffer.from(
+        serviceAccountKeyBase64,
+        "base64"
+      ).toString("utf-8");
+      const credentials = JSON.parse(serviceAccountKeyJson);
+
+      // Use the service account to get an access token
+      const { GoogleAuth } = await import("google-auth-library");
+      const auth = new GoogleAuth({
+        credentials,
+        scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+      });
+
+      const authClient = await auth.getClient();
+      const accessToken = await authClient.getAccessToken();
+
+      if (accessToken.token) {
+        headers["Authorization"] = `Bearer ${accessToken.token}`;
+      }
+    } catch (error) {
+      console.error("Failed to get Google Cloud access token:", error);
+      throw new Error("Authentication failed");
+    }
   }
 
-  // For local development, use application default credentials
   return headers;
 }
 
