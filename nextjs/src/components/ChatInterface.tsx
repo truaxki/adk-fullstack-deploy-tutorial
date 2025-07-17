@@ -368,7 +368,7 @@ export default function ChatInterface() {
       let functionResponse = undefined;
       let sources = undefined;
 
-      // Extract text from content.parts
+      // Extract text from content.parts (separate thoughts from regular text)
       let thoughtParts: string[] = [];
       if (parsed.content && parsed.content.parts) {
         // Extract regular text (non-thoughts)
@@ -482,17 +482,23 @@ export default function ChatInterface() {
   // Get event title for single agent (simplified from multi-agent version)
   const getEventTitle = (agentName: string): string => {
     // For single agent, focus on activity type rather than agent name
+    if (
+      agentName === "goal_planning_agent" ||
+      agentName === "goal-planning-agent"
+    ) {
+      return "🎯 Planning Strategy";
+    }
     if (agentName.includes("plan") || agentName.includes("planning")) {
-      return "Planning Strategy";
+      return "🎯 Planning Strategy";
     }
     if (agentName.includes("research") || agentName.includes("search")) {
-      return "Researching Information";
+      return "🔍 Researching Information";
     }
     if (agentName.includes("analysis") || agentName.includes("evaluating")) {
-      return "Analyzing Content";
+      return "📊 Analyzing Content";
     }
     if (agentName.includes("writing") || agentName.includes("report")) {
-      return "Writing Response";
+      return "✍️ Writing Response";
     }
     return `Processing (${agentName || "AI Agent"})`;
   };
@@ -567,7 +573,7 @@ export default function ChatInterface() {
         );
       }
 
-      // Handle thoughts - always show in timeline for reasoning display
+      // Handle thoughts - show in timeline for transparency like the example
       if (thoughtParts.length > 0) {
         console.log(
           "[SSE HANDLER] Processing thought parts for agent:",
@@ -589,7 +595,12 @@ export default function ChatInterface() {
 
       if (textParts.length > 0) {
         // Handle different agent types like the example app
-        if (agent === "goal-planning-agent") {
+        if (
+          agent === "goal_planning_agent" ||
+          agent === "goal-planning-agent" ||
+          agent === "interactive_planner_agent" ||
+          agent === "root_agent"
+        ) {
           // MAIN PLANNING AGENT → Stream text directly to main message (real-time effect)
           console.log(
             "[SSE HANDLER] Streaming text directly to main message for agent:",
@@ -608,8 +619,9 @@ export default function ChatInterface() {
               )
             );
           }
-        } else {
+        } else if (agent !== "report_composer_with_citations") {
           // OTHER AGENTS → Timeline events only (research, function calls, etc.)
+          // BUT NOT for final report composition
           const eventTitle = getEventTitle(agent);
           console.log(
             "[SSE HANDLER] Adding Text timeline event for agent:",
@@ -627,6 +639,7 @@ export default function ChatInterface() {
             ])
           );
         }
+        // Note: report_composer_with_citations is handled separately below
       }
 
       if (sources) {

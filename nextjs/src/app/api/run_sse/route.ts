@@ -23,6 +23,7 @@ interface AdkAgentResponse {
   output?: string;
   response?: string;
   role?: string;
+  author?: string;
   usageMetadata?: unknown;
   actions?: unknown;
 }
@@ -361,33 +362,17 @@ export async function POST(request: NextRequest): Promise<Response> {
                             ? rawParsed[0]
                             : (rawParsed as AdkAgentResponse);
 
-                        // Extract readable text from ADK agent response
-                        let extractedText = "";
-
-                        if (parsed.content && parsed.content.parts) {
-                          // Handle content.parts structure from ADK agent
-                          const textParts = parsed.content.parts
-                            .filter(
-                              (part: ContentPart) => !part.thought && part.text
-                            ) // Skip thought parts
-                            .map((part: ContentPart) => part.text);
-                          extractedText = textParts.join("");
-                        } else if (parsed.output) {
-                          // Handle direct output field
-                          extractedText = parsed.output;
-                        } else if (parsed.response) {
-                          // Handle response field
-                          extractedText = parsed.response;
-                        } else if (typeof parsed === "string") {
-                          // Handle direct string response
-                          extractedText = parsed;
-                        }
-
-                        // Create properly formatted SSE response
+                        // Forward the complete parsed response to frontend
+                        // This preserves all the metadata (author, actions, thoughts, etc.)
                         const sseData = {
-                          content: {
-                            parts: [{ text: extractedText }],
+                          content: parsed.content || {
+                            parts: [
+                              { text: parsed.output || parsed.response || "" },
+                            ],
                           },
+                          author: parsed.author,
+                          actions: parsed.actions,
+                          usageMetadata: parsed.usageMetadata,
                         };
 
                         const formattedChunk = `data: ${JSON.stringify(

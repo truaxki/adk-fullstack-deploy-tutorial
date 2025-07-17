@@ -307,7 +307,7 @@ const AiMessageBubble = ({
           <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
             <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
             <span className="text-sm text-slate-400">
-              Planning your goal...
+              🤔 Thinking and planning...
             </span>
           </div>
         </div>
@@ -332,9 +332,9 @@ const AiMessageBubble = ({
               websiteCount={websiteCount || 0}
             />
 
-            {/* Show processing indicator */}
+            {/* Show thinking indicator */}
             <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 mt-2">
-              <span className="text-sm text-slate-400">Processing...</span>
+              <span className="text-sm text-slate-400">🤔 Thinking...</span>
             </div>
           </div>
         </div>
