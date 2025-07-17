@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { endpointConfig, getAuthHeaders } from "@/lib/config";
 
+// Configure maximum execution duration (5 minutes = 300 seconds)
+export const maxDuration = 300;
+
 // Type definitions for different payload formats
 type AgentEnginePayload = {
   class_method: "stream_query";
@@ -114,6 +117,41 @@ export async function POST(request: NextRequest): Promise<Response> {
         "content-type"
       )}`
     );
+    console.log(
+      `📋 Response status: ${response.status} ${response.statusText}`
+    );
+    console.log(
+      `📋 All response headers:`,
+      Object.fromEntries(response.headers.entries())
+    );
+
+    // Debug: Check if this is actually an error response disguised as 200 OK
+    if (response.headers.get("content-type")?.includes("application/json")) {
+      console.log(
+        "⚠️ Agent Engine returned JSON instead of SSE stream - this might be an error"
+      );
+
+      // Let's peek at the response to see if it's an error
+      const clonedResponse = response.clone();
+      try {
+        const jsonResponse = await clonedResponse.json();
+        console.log(
+          "📄 Agent Engine JSON response:",
+          JSON.stringify(jsonResponse, null, 2)
+        );
+
+        // If this is an error, return it immediately
+        if (jsonResponse.error || jsonResponse.status === "error") {
+          console.error("❌ Agent Engine returned error:", jsonResponse);
+          return NextResponse.json(
+            { error: `Agent Engine error: ${JSON.stringify(jsonResponse)}` },
+            { status: 500 }
+          );
+        }
+      } catch (e) {
+        console.log("📄 Could not parse as JSON, continuing with stream...", e);
+      }
+    }
 
     // Create a readable stream to forward the response
     const stream = new ReadableStream({
@@ -121,23 +159,45 @@ export async function POST(request: NextRequest): Promise<Response> {
         const reader = response.body?.getReader();
 
         if (!reader) {
+          console.log("❌ No response body from Agent Engine");
           controller.close();
           return;
         }
 
         const pump = async () => {
           try {
+            let chunkCount = 0;
+            const decoder = new TextDecoder();
+
             while (true) {
               const { done, value } = await reader.read();
 
               if (done) {
-                console.log(`🏁 Stream complete`);
+                console.log(`🏁 Stream complete after ${chunkCount} chunks`);
                 controller.close();
                 break;
               }
 
-              // Forward the raw chunk directly to frontend
-              controller.enqueue(value);
+              chunkCount++;
+              const chunk = decoder.decode(value, { stream: true });
+              console.log(
+                `📦 Chunk ${chunkCount} received (${chunk.length} bytes):`
+              );
+              console.log(
+                `📄 Chunk content:`,
+                chunk.substring(0, 500) + (chunk.length > 500 ? "..." : "")
+              );
+
+              // Check if this looks like SSE format or raw JSON
+              if (chunk.includes("data:")) {
+                console.log("✅ Detected SSE format - forwarding directly");
+                controller.enqueue(value);
+              } else {
+                console.log("🔄 Detected raw JSON - converting to SSE format");
+                // Convert raw JSON to SSE format
+                const sseChunk = `data: ${chunk}\n\n`;
+                controller.enqueue(new TextEncoder().encode(sseChunk));
+              }
             }
           } catch (error) {
             console.error(`❌ Stream error:`, error);

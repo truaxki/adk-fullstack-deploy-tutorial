@@ -829,12 +829,19 @@ export default function ChatInterface() {
         let lineBuffer = "";
         let eventDataBuffer = "";
 
+        console.log("[SSE START] Beginning to process streaming response");
+
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
 
             if (value) {
-              lineBuffer += decoder.decode(value, { stream: true });
+              const chunk = decoder.decode(value, { stream: true });
+              lineBuffer += chunk;
+              console.log(
+                `[SSE CHUNK] Received ${chunk.length} bytes:`,
+                chunk.substring(0, 200) + (chunk.length > 200 ? "..." : "")
+              );
             }
 
             let eolIndex;
@@ -851,6 +858,8 @@ export default function ChatInterface() {
                 lineBuffer = "";
               }
 
+              console.log(`[SSE LINE] Processing line: "${line}"`);
+
               if (line.trim() === "") {
                 // Empty line: dispatch event
                 if (eventDataBuffer.length > 0) {
@@ -858,26 +867,32 @@ export default function ChatInterface() {
                     ? eventDataBuffer.slice(0, -1)
                     : eventDataBuffer;
                   console.log(
-                    "[SSE DISPATCH EVENT]:",
+                    "[SSE DISPATCH EVENT] Processing event data:",
                     jsonDataToParse.substring(0, 200) + "..."
                   );
                   processSseEventData(jsonDataToParse, aiMessageId);
                   eventDataBuffer = "";
                 }
               } else if (line.startsWith("data:")) {
-                eventDataBuffer += line.substring(5).trimStart() + "\n";
+                const eventData = line.substring(5).trimStart();
+                eventDataBuffer += eventData + "\n";
+                console.log(`[SSE DATA] Added to buffer: "${eventData}"`);
               } else if (line.startsWith(":")) {
+                console.log(`[SSE COMMENT] Ignoring comment: "${line}"`);
                 // Comment line, ignore
+              } else {
+                console.log(`[SSE OTHER] Unknown line format: "${line}"`);
               }
             }
 
             if (done) {
+              console.log("[SSE DONE] Stream ended, processing final buffer");
               if (eventDataBuffer.length > 0) {
                 const jsonDataToParse = eventDataBuffer.endsWith("\n")
                   ? eventDataBuffer.slice(0, -1)
                   : eventDataBuffer;
                 console.log(
-                  "[SSE DISPATCH FINAL EVENT]:",
+                  "[SSE DISPATCH FINAL EVENT] Processing final event:",
                   jsonDataToParse.substring(0, 200) + "..."
                 );
                 processSseEventData(jsonDataToParse, aiMessageId);
