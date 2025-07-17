@@ -270,26 +270,59 @@ function extractNewTextFromBuffer(
   alreadyExtractedLength: number
 ): string {
   try {
-    // Use regex to find text content in JSON, even if incomplete
-    // Pattern matches: "text": "content..."
-    const textPattern = /"text"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/g;
-    const matches = [];
-    let match;
+    // Extract only non-thought text content from JSON parts
+    const allTextMatches: string[] = [];
 
-    // Extract all text matches
-    while ((match = textPattern.exec(jsonBuffer)) !== null) {
-      const textContent = match[1];
-      // Unescape JSON string content
-      const unescapedText = textContent.replace(/\\(.)/g, "$1");
-      matches.push(unescapedText);
+    // Find all parts in the content.parts array
+    const partsPattern = /"parts"\s*:\s*\[([\s\S]*?)\]/g;
+    const partsMatch = partsPattern.exec(jsonBuffer);
+
+    if (partsMatch) {
+      const partsContent = partsMatch[1];
+
+      // Find individual part objects within the parts array
+      const partPattern = /\{[^}]*"text"\s*:\s*"([^"]*(?:\\.[^"]*)*)"[^}]*\}/g;
+      let partMatch;
+
+      while ((partMatch = partPattern.exec(partsContent)) !== null) {
+        const fullPartText = partMatch[0];
+        const textContent = partMatch[1];
+
+        // Skip if this part has "thought": true
+        if (/"thought"\s*:\s*true/.test(fullPartText)) {
+          console.log(
+            "🤔 Skipping thought text:",
+            textContent.substring(0, 50) + "..."
+          );
+          continue;
+        }
+
+        // Unescape JSON string content properly
+        const unescapedText = textContent
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, "\\")
+          .replace(/\\n/g, "\n")
+          .replace(/\\r/g, "\r")
+          .replace(/\\t/g, "\t");
+
+        allTextMatches.push(unescapedText);
+        console.log(
+          "📝 Found non-thought text:",
+          unescapedText.substring(0, 50) + "..."
+        );
+      }
     }
 
-    // Combine all text content
-    const fullText = matches.join(" ");
+    // Combine all non-thought text content
+    const fullText = allTextMatches.join(" ");
+    console.log(
+      `📊 Total extracted text: ${fullText.length} chars, already sent: ${alreadyExtractedLength} chars`
+    );
 
     // Return only the new portion that we haven't sent yet
     if (fullText.length > alreadyExtractedLength) {
       const newText = fullText.substring(alreadyExtractedLength);
+      console.log(`✨ New text to stream: "${newText.substring(0, 100)}..."`);
       return newText.trim();
     }
 

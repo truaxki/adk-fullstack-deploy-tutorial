@@ -655,7 +655,6 @@ export default function ChatInterface() {
         // Handle different agent types like the example app
         if (
           agent === "goal-planning-agent" ||
-          agent === "goal-planning-agent" ||
           agent === "interactive_planner_agent" ||
           agent === "root_agent"
         ) {
