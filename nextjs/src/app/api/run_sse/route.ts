@@ -132,7 +132,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           try {
             let chunkCount = 0;
             let jsonBuffer = "";
-            let extractedTextLength = 0; // Track how much text we've already sent
+            // Reset processed parts count for new request
+            processedPartsCount = 0;
             const decoder = new TextDecoder();
 
             while (true) {
@@ -172,10 +173,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               console.log(`📄 Chunk preview:`, chunk.substring(0, 100) + "...");
 
               // Extract new text from the current buffer and stream it immediately
-              const newText = extractNewTextFromBuffer(
-                jsonBuffer,
-                extractedTextLength
-              );
+              const newText = extractNewTextFromBuffer(jsonBuffer);
               if (newText) {
                 console.log(
                   `📝 Extracted new text (${newText.length} chars):`,
@@ -197,8 +195,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                   `📤 Streamed incremental text (${newText.length} chars)`
                 );
 
-                // Update tracking
-                extractedTextLength += newText.length;
+                // Text tracking is now handled by processedPartsCount
               }
 
               // Try to parse as complete JSON to send structured events
@@ -213,7 +210,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
                 // Clear buffer after successful processing
                 jsonBuffer = "";
-                extractedTextLength = 0;
+                // Note: processedPartsCount is reset per request, handled globally
               } catch {
                 // JSON still incomplete, continue accumulating and streaming text
                 console.log(
@@ -264,55 +261,94 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
-// Extract new text content from JSON buffer using regex patterns
-function extractNewTextFromBuffer(
-  jsonBuffer: string,
-  alreadyExtractedLength: number
-): string {
-  try {
-    // Extract ALL text content from JSON parts (including thoughts for transparency)
-    const allTextMatches: string[] = [];
+// Track processed parts count to avoid re-processing same parts
+let processedPartsCount = 0;
 
+// Extract new text content from JSON buffer - only new parts
+function extractNewTextFromBuffer(jsonBuffer: string): string {
+  try {
     // Find all parts in the content.parts array
     const partsPattern = /"parts"\s*:\s*\[([\s\S]*?)\]/g;
     const partsMatch = partsPattern.exec(jsonBuffer);
 
-    if (partsMatch) {
-      const partsContent = partsMatch[1];
+    if (!partsMatch) {
+      console.log("❌ No parts array found in buffer");
+      return "";
+    }
 
-      // Find individual part objects within the parts array
-      const partPattern = /\{[^}]*"text"\s*:\s*"([^"]*(?:\\.[^"]*)*)"[^}]*\}/g;
-      let partMatch;
+    const partsContent = partsMatch[1];
 
-      while ((partMatch = partPattern.exec(partsContent)) !== null) {
-        const textContent = partMatch[1];
+    // Find all complete part objects (with proper JSON structure)
+    const completeParts: string[] = [];
+    const partPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
+    let partMatch;
 
-        // Unescape JSON string content properly
-        const unescapedText = textContent
-          .replace(/\\"/g, '"')
-          .replace(/\\\\/g, "\\")
-          .replace(/\\n/g, "\n")
-          .replace(/\\r/g, "\r")
-          .replace(/\\t/g, "\t");
+    while ((partMatch = partPattern.exec(partsContent)) !== null) {
+      const partJson = partMatch[0];
 
-        allTextMatches.push(unescapedText);
-        console.log(
-          "📝 Found text content:",
-          unescapedText.substring(0, 50) + "..."
-        );
+      // Verify it's a valid JSON object with text property
+      try {
+        const parsed = JSON.parse(partJson);
+        if (parsed.text) {
+          completeParts.push(partJson);
+        }
+      } catch {
+        // Skip invalid JSON parts (incomplete chunks)
+        continue;
       }
     }
 
-    // Combine all text content (thoughts + regular text)
-    const fullText = allTextMatches.join(" ");
     console.log(
-      `📊 Total extracted text: ${fullText.length} chars, already sent: ${alreadyExtractedLength} chars`
+      `📊 Found ${completeParts.length} complete parts, already processed: ${processedPartsCount}`
     );
 
-    // Return only the new portion that we haven't sent yet
-    if (fullText.length > alreadyExtractedLength) {
-      const newText = fullText.substring(alreadyExtractedLength);
-      console.log(`✨ New text to stream: "${newText.substring(0, 100)}..."`);
+    // Only process new parts beyond what we've already handled
+    const newParts = completeParts.slice(processedPartsCount);
+
+    if (newParts.length === 0) {
+      return "";
+    }
+
+    console.log(`🆕 Processing ${newParts.length} new parts`);
+
+    // Extract text from new parts only
+    const newTextParts: string[] = [];
+
+    for (const partJson of newParts) {
+      try {
+        const partObj = JSON.parse(partJson);
+        if (partObj.text) {
+          // Unescape JSON string content properly
+          const unescapedText = partObj.text
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, "\\")
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r")
+            .replace(/\\t/g, "\t");
+
+          newTextParts.push(unescapedText);
+          console.log(
+            `📝 New part text: "${unescapedText.substring(0, 100)}..."`
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error parsing part JSON:", error);
+      }
+    }
+
+    // Update processed parts count
+    processedPartsCount = completeParts.length;
+
+    // Combine new text content
+    const newText = newTextParts.join(" ");
+
+    if (newText.length > 0) {
+      console.log(
+        `✨ Extracted ${newText.length} chars of new text: "${newText.substring(
+          0,
+          100
+        )}..."`
+      );
       return newText.trim();
     }
 
