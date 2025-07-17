@@ -230,19 +230,75 @@ export async function POST(request: NextRequest): Promise<Response> {
       const stream = new ReadableStream({
         start(controller) {
           if (!streamResponse.body) {
-            console.log(`❌ No response body from Agent Engine`);
+            console.log("❌ No response body from Agent Engine");
             controller.close();
             return;
           }
 
-          console.log(
-            `✅ Agent Engine response body exists, starting stream reader...`
-          );
           const reader = streamResponse.body.getReader();
           const decoder = new TextDecoder();
           let chunkCount = 0;
-          let buffer = ""; // Buffer to accumulate incomplete JSON
-          const startTime = Date.now(); // Track timing
+          let buffer = ""; // Only for text extraction, not for waiting
+          let extractedTextLength = 0; // Track what we've already sent
+          const startTime = Date.now();
+
+          console.log("✅ Starting incremental text extraction streaming...");
+
+          // Helper function to extract new text content from growing buffer
+          function extractNewTextFromBuffer(
+            buffer: string,
+            alreadyExtracted: number
+          ): string | null {
+            try {
+              // Look for text patterns in the growing JSON
+              // Pattern: "text": "content here..."
+              const textMatches = [
+                ...buffer.matchAll(/"text"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/g),
+              ];
+
+              if (textMatches.length === 0) return null;
+
+              // Combine all text content found so far
+              const allText = textMatches
+                .map((match) => {
+                  // Unescape JSON string
+                  return match[1]
+                    .replace(/\\"/g, '"')
+                    .replace(/\\n/g, "\n")
+                    .replace(/\\\\/g, "\\");
+                })
+                .join(" ");
+
+              // Return only the new part we haven't sent yet
+              if (allText.length > alreadyExtracted) {
+                return allText.substring(alreadyExtracted);
+              }
+
+              return null;
+            } catch (error) {
+              console.error("Error extracting text from buffer:", error);
+              return null;
+            }
+          }
+
+          // Helper function to extract metadata (agent, actions) when available
+          function extractMetadataFromBuffer(
+            buffer: string
+          ): { author: string; type: string } | null {
+            try {
+              // Try to find complete metadata objects
+              const agentMatch = buffer.match(/"author"\s*:\s*"([^"]+)"/);
+              if (agentMatch) {
+                return {
+                  author: agentMatch[1],
+                  type: "metadata",
+                };
+              }
+              return null;
+            } catch {
+              return null;
+            }
+          }
 
           async function pump() {
             try {
@@ -251,29 +307,23 @@ export async function POST(request: NextRequest): Promise<Response> {
 
                 if (done) {
                   console.log(`🏁 Stream complete after ${chunkCount} chunks`);
-                  // Process any remaining data in buffer
-                  if (buffer.trim()) {
+                  // Send any remaining text
+                  const finalText = extractNewTextFromBuffer(
+                    buffer,
+                    extractedTextLength
+                  );
+                  if (finalText) {
+                    const finalEvent = {
+                      content: { parts: [{ text: finalText }] },
+                      author: "goal_planning_agent",
+                    };
+                    const finalChunk = `data: ${JSON.stringify(
+                      finalEvent
+                    )}\n\n`;
+                    controller.enqueue(new TextEncoder().encode(finalChunk));
                     console.log(
-                      `🔄 Processing final buffer content: ${buffer.substring(
-                        0,
-                        100
-                      )}...`
+                      `✅ Final text forwarded: ${finalText.length} chars`
                     );
-                    try {
-                      const parsedJson = JSON.parse(buffer.trim());
-                      const sseFormattedChunk = `data: ${JSON.stringify(
-                        parsedJson
-                      )}\n\n`;
-                      controller.enqueue(
-                        new TextEncoder().encode(sseFormattedChunk)
-                      );
-                      console.log(`✅ Final buffer forwarded as SSE to client`);
-                    } catch (parseError) {
-                      console.error(
-                        "❌ Failed to parse final buffer as JSON:",
-                        parseError
-                      );
-                    }
                   }
                   break;
                 }
@@ -281,99 +331,60 @@ export async function POST(request: NextRequest): Promise<Response> {
                 chunkCount++;
                 const rawChunk = decoder.decode(value, { stream: true });
                 console.log(
-                  `📦 Chunk ${chunkCount} received (${rawChunk.length} bytes):`,
-                  rawChunk.substring(0, 200) +
-                    (rawChunk.length > 200 ? "..." : "")
+                  `📦 Chunk ${chunkCount} received (${rawChunk.length} bytes)`
                 );
-                console.log(`🔢 Current buffer size: ${buffer.length} bytes`);
 
-                // Add chunk to buffer
+                // Add chunk to buffer for text extraction
                 buffer += rawChunk;
 
-                // Try to extract complete JSON objects from buffer
-                let jsonStart = 0;
-                let braceCount = 0;
-                let inString = false;
-                let escaped = false;
+                // Extract and stream any new text content immediately
+                const newText = extractNewTextFromBuffer(
+                  buffer,
+                  extractedTextLength
+                );
 
-                for (let i = 0; i < buffer.length; i++) {
-                  const char = buffer[i];
+                if (newText) {
+                  console.log(
+                    `🚀 Streaming new text (${newText.length} chars):`,
+                    newText.substring(0, 50) + "..."
+                  );
 
-                  if (escaped) {
-                    escaped = false;
-                    continue;
-                  }
+                  // Create SSE event with incremental text
+                  const sseEvent = {
+                    content: {
+                      parts: [{ text: newText }],
+                    },
+                    author: "goal_planning_agent", // Will be updated when we find actual agent
+                  };
 
-                  if (char === "\\") {
-                    escaped = true;
-                    continue;
-                  }
+                  const sseChunk = `data: ${JSON.stringify(sseEvent)}\n\n`;
+                  controller.enqueue(new TextEncoder().encode(sseChunk));
 
-                  if (char === '"') {
-                    inString = !inString;
-                    continue;
-                  }
+                  extractedTextLength += newText.length;
+                  console.log(
+                    `✅ Forwarded ${newText.length} new chars, total: ${extractedTextLength}`
+                  );
+                }
 
-                  if (!inString) {
-                    if (char === "{") {
-                      if (braceCount === 0) {
-                        jsonStart = i;
-                      }
-                      braceCount++;
-                    } else if (char === "}") {
-                      braceCount--;
-                      if (braceCount === 0) {
-                        // Found complete JSON object
-                        const jsonStr = buffer.substring(jsonStart, i + 1);
-                        console.log(
-                          `🎯 Found complete JSON (${jsonStr.length} bytes) after ${chunkCount} chunks:`,
-                          jsonStr.substring(0, 100) + "..."
-                        );
-                        console.log(
-                          `⏰ Time since start: ${Date.now() - startTime}ms`
-                        );
-
-                        try {
-                          const parsedJson = JSON.parse(jsonStr);
-                          const sseFormattedChunk = `data: ${JSON.stringify(
-                            parsedJson
-                          )}\n\n`;
-                          console.log(
-                            `🔄 Transformed complete JSON to SSE format`
-                          );
-
-                          controller.enqueue(
-                            new TextEncoder().encode(sseFormattedChunk)
-                          );
-                          console.log(
-                            `✅ Complete JSON forwarded as SSE to client`
-                          );
-
-                          // Remove processed JSON from buffer
-                          buffer = buffer.substring(i + 1);
-                          i = -1; // Reset loop
-                          jsonStart = 0;
-                        } catch (parseError) {
-                          console.error(
-                            "❌ Failed to parse extracted JSON:",
-                            parseError
-                          );
-                          console.error(
-                            "❌ Problematic JSON:",
-                            jsonStr.substring(0, 200)
-                          );
-                          // Continue trying to find next complete JSON
-                        }
-                      }
-                    }
-                  }
+                // Also check for complete metadata (agent, actions, etc.) and send separately
+                const metadata = extractMetadataFromBuffer(buffer);
+                if (metadata) {
+                  const metadataEvent = `data: ${JSON.stringify(metadata)}\n\n`;
+                  controller.enqueue(new TextEncoder().encode(metadataEvent));
+                  console.log(
+                    `📊 Forwarded metadata: ${
+                      metadata.author || "unknown agent"
+                    }`
+                  );
                 }
               }
             } catch (error) {
-              console.error("❌ Error reading Agent Engine stream:", error);
+              console.error("❌ Error in streaming pump:", error);
             } finally {
               console.log(
-                `🔚 Closing stream controller after ${chunkCount} chunks`
+                `🔚 Closing stream after ${chunkCount} chunks, total time: ${
+                  Date.now() - startTime
+                }ms`
               );
               controller.close();
             }
