@@ -823,67 +823,104 @@ export default function ChatInterface() {
           );
         }
 
-        // Handle SSE streaming with enhanced processing
+        // Handle SSE streaming with raw Agent Engine response
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
-        let lineBuffer = "";
-        let eventDataBuffer = "";
+        let buffer = "";
 
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
 
-            if (value) {
-              lineBuffer += decoder.decode(value, { stream: true });
-            }
-
-            let eolIndex;
-            while (
-              (eolIndex = lineBuffer.indexOf("\n")) >= 0 ||
-              (done && lineBuffer.length > 0)
-            ) {
-              let line: string;
-              if (eolIndex >= 0) {
-                line = lineBuffer.substring(0, eolIndex);
-                lineBuffer = lineBuffer.substring(eolIndex + 1);
-              } else {
-                line = lineBuffer;
-                lineBuffer = "";
-              }
-
-              if (line.trim() === "") {
-                // Empty line: dispatch event
-                if (eventDataBuffer.length > 0) {
-                  const jsonDataToParse = eventDataBuffer.endsWith("\n")
-                    ? eventDataBuffer.slice(0, -1)
-                    : eventDataBuffer;
-                  console.log(
-                    "[SSE DISPATCH EVENT]:",
-                    jsonDataToParse.substring(0, 200) + "..."
-                  );
-                  processSseEventData(jsonDataToParse, aiMessageId);
-                  eventDataBuffer = "";
-                }
-              } else if (line.startsWith("data:")) {
-                eventDataBuffer += line.substring(5).trimStart() + "\n";
-              } else if (line.startsWith(":")) {
-                // Comment line, ignore
-              }
-            }
-
             if (done) {
-              if (eventDataBuffer.length > 0) {
-                const jsonDataToParse = eventDataBuffer.endsWith("\n")
-                  ? eventDataBuffer.slice(0, -1)
-                  : eventDataBuffer;
-                console.log(
-                  "[SSE DISPATCH FINAL EVENT]:",
-                  jsonDataToParse.substring(0, 200) + "..."
-                );
-                processSseEventData(jsonDataToParse, aiMessageId);
-                eventDataBuffer = "";
-              }
+              console.log("[SSE COMPLETE] Stream ended");
               break;
+            }
+
+            // Decode the chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            console.log(
+              `[SSE CHUNK] Received ${chunk.length} bytes, buffer now ${buffer.length} bytes`
+            );
+
+            // Try to extract and process any complete JSON objects from the buffer
+            let startPos = 0;
+            while (startPos < buffer.length) {
+              // Look for the start of a JSON object
+              const openBrace = buffer.indexOf("{", startPos);
+              if (openBrace === -1) break;
+
+              // Try to find the matching closing brace
+              let braceCount = 0;
+              let pos = openBrace;
+              let inString = false;
+              let escaped = false;
+
+              while (pos < buffer.length) {
+                const char = buffer[pos];
+
+                if (escaped) {
+                  escaped = false;
+                } else if (char === "\\" && inString) {
+                  escaped = true;
+                } else if (char === '"') {
+                  inString = !inString;
+                } else if (!inString) {
+                  if (char === "{") {
+                    braceCount++;
+                  } else if (char === "}") {
+                    braceCount--;
+                    if (braceCount === 0) {
+                      // Found complete JSON object
+                      const jsonStr = buffer.substring(openBrace, pos + 1);
+                      console.log(
+                        `[SSE EXTRACT] Found complete JSON object (${jsonStr.length} chars)`
+                      );
+
+                      try {
+                        const jsonData = JSON.parse(jsonStr);
+                        console.log(
+                          "[SSE PROCESS] Processing JSON object:",
+                          JSON.stringify(jsonData, null, 2)
+                        );
+                        processSseEventData(
+                          JSON.stringify(jsonData),
+                          aiMessageId
+                        );
+                      } catch (parseError) {
+                        console.warn(
+                          "[SSE PARSE ERROR] Failed to parse JSON:",
+                          parseError
+                        );
+                        console.log(
+                          "[SSE RAW] Problematic JSON:",
+                          jsonStr.substring(0, 200) + "..."
+                        );
+                      }
+
+                      // Move past this object
+                      startPos = pos + 1;
+                      break;
+                    }
+                  }
+                }
+                pos++;
+              }
+
+              // If we didn't find a complete object, break and wait for more data
+              if (braceCount > 0 || pos >= buffer.length) {
+                break;
+              }
+            }
+
+            // Keep only the unprocessed part of the buffer
+            buffer = buffer.substring(startPos);
+            if (buffer.length > 10000) {
+              console.warn(
+                "[SSE BUFFER] Buffer getting large, truncating old data"
+              );
+              buffer = buffer.substring(buffer.length - 5000);
             }
           }
         }
