@@ -54,19 +54,15 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    // Use the existing configuration system to determine the backend URL
+    // Forward request to Agent Engine
     console.log(`🔧 Using deployment type: ${endpointConfig.deploymentType}`);
     console.log(`🔧 Backend URL: ${endpointConfig.backendUrl}`);
     console.log(`🔧 Agent Engine URL: ${endpointConfig.agentEngineUrl}`);
 
     let agentEngineUrl: string;
     let agentEnginePayload: BackendPayload;
-    let headers: Record<string, string>;
 
-    if (
-      endpointConfig.deploymentType === "agent_engine" &&
-      endpointConfig.agentEngineUrl
-    ) {
+    if (endpointConfig.deploymentType === "agent_engine") {
       // Agent Engine deployment - use stream_query format
       agentEngineUrl = `${endpointConfig.agentEngineUrl}:streamQuery?alt=sse`;
       agentEnginePayload = {
@@ -77,26 +73,26 @@ export async function POST(request: NextRequest): Promise<Response> {
           message: message,
         },
       };
-      headers = await getAuthHeaders();
     } else {
-      // Local or other deployment - use simple format
-      agentEngineUrl = `${endpointConfig.backendUrl}/run_sse`;
+      // Local deployment - use simple format
+      agentEngineUrl = `${endpointConfig.backendUrl}/stream`;
       agentEnginePayload = {
-        message,
-        userId,
-        sessionId,
-      };
-      headers = {
-        "Content-Type": "application/json",
+        message: message,
+        userId: userId,
+        sessionId: sessionId,
       };
     }
 
     console.log(`🔗 Forwarding to: ${agentEngineUrl}`);
     console.log(`📤 Payload:`, agentEnginePayload);
 
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(agentEngineUrl, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
       body: JSON.stringify(agentEnginePayload),
     });
 
@@ -120,40 +116,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     console.log(
       `📋 Response status: ${response.status} ${response.statusText}`
     );
-    console.log(
-      `📋 All response headers:`,
-      Object.fromEntries(response.headers.entries())
-    );
 
-    // Debug: Check if this is actually an error response disguised as 200 OK
-    if (response.headers.get("content-type")?.includes("application/json")) {
-      console.log(
-        "⚠️ Agent Engine returned JSON instead of SSE stream - this might be an error"
-      );
-
-      // Let's peek at the response to see if it's an error
-      const clonedResponse = response.clone();
-      try {
-        const jsonResponse = await clonedResponse.json();
-        console.log(
-          "📄 Agent Engine JSON response:",
-          JSON.stringify(jsonResponse, null, 2)
-        );
-
-        // If this is an error, return it immediately
-        if (jsonResponse.error || jsonResponse.status === "error") {
-          console.error("❌ Agent Engine returned error:", jsonResponse);
-          return NextResponse.json(
-            { error: `Agent Engine error: ${JSON.stringify(jsonResponse)}` },
-            { status: 500 }
-          );
-        }
-      } catch (e) {
-        console.log("📄 Could not parse as JSON, continuing with stream...", e);
-      }
-    }
-
-    // Create a readable stream to forward the response
+    // Create a readable stream that extracts text from Agent Engine JSON fragments in real-time
     const stream = new ReadableStream({
       start(controller) {
         const reader = response.body?.getReader();
@@ -164,44 +128,115 @@ export async function POST(request: NextRequest): Promise<Response> {
           return;
         }
 
-        const pump = async () => {
+        const pump = async (): Promise<void> => {
           try {
             let chunkCount = 0;
+            let jsonBuffer = "";
+            let extractedTextLength = 0; // Track how much text we've already sent
             const decoder = new TextDecoder();
 
             while (true) {
               const { done, value } = await reader.read();
 
               if (done) {
-                console.log(`🏁 Stream complete after ${chunkCount} chunks`);
+                console.log(
+                  `🏁 Agent Engine stream complete after ${chunkCount} chunks`
+                );
+
+                // Process any remaining JSON buffer for final content
+                if (jsonBuffer.trim()) {
+                  console.log(
+                    `📄 Processing final JSON buffer (${jsonBuffer.length} chars)`
+                  );
+                  try {
+                    const finalJson = JSON.parse(jsonBuffer);
+                    const finalEvent = `data: ${JSON.stringify(finalJson)}\n\n`;
+                    controller.enqueue(new TextEncoder().encode(finalEvent));
+                    console.log(`📤 Sent final complete JSON event`);
+                  } catch {
+                    console.log(`⚠️ Final buffer not valid JSON, skipping`);
+                  }
+                }
+
                 controller.close();
                 break;
               }
 
               chunkCount++;
               const chunk = decoder.decode(value, { stream: true });
-              console.log(
-                `📦 Chunk ${chunkCount} received (${chunk.length} bytes):`
-              );
-              console.log(
-                `📄 Chunk content:`,
-                chunk.substring(0, 500) + (chunk.length > 500 ? "..." : "")
-              );
+              jsonBuffer += chunk;
 
-              // Check if this looks like SSE format or raw JSON
-              if (chunk.includes("data:")) {
-                console.log("✅ Detected SSE format - forwarding directly");
-                controller.enqueue(value);
-              } else {
-                console.log("🔄 Detected raw JSON - converting to SSE format");
-                // Convert raw JSON to SSE format
-                const sseChunk = `data: ${chunk}\n\n`;
-                controller.enqueue(new TextEncoder().encode(sseChunk));
+              console.log(
+                `📦 Chunk ${chunkCount} received (${chunk.length} bytes)`
+              );
+              console.log(`📄 Chunk preview:`, chunk.substring(0, 100) + "...");
+
+              // Extract new text from the current buffer and stream it immediately
+              const newText = extractNewTextFromBuffer(
+                jsonBuffer,
+                extractedTextLength
+              );
+              if (newText) {
+                console.log(
+                  `📝 Extracted new text (${newText.length} chars):`,
+                  newText.substring(0, 50) + "..."
+                );
+
+                // Create incremental SSE event with the new text
+                const incrementalEvent = {
+                  content: { parts: [{ text: newText }] },
+                  author: "goal-planning-agent",
+                  incremental: true, // Flag to indicate this is partial content
+                };
+
+                const sseEvent = `data: ${JSON.stringify(
+                  incrementalEvent
+                )}\n\n`;
+                controller.enqueue(new TextEncoder().encode(sseEvent));
+                console.log(
+                  `📤 Streamed incremental text (${newText.length} chars)`
+                );
+
+                // Update tracking
+                extractedTextLength += newText.length;
+              }
+
+              // Try to parse as complete JSON to send structured events
+              try {
+                const completeJson = JSON.parse(jsonBuffer);
+                console.log(`✅ Complete JSON received, sending final event`);
+
+                // Send the complete response
+                const finalEvent = `data: ${JSON.stringify(completeJson)}\n\n`;
+                controller.enqueue(new TextEncoder().encode(finalEvent));
+                console.log(`📤 Sent complete JSON event`);
+
+                // Clear buffer after successful processing
+                jsonBuffer = "";
+                extractedTextLength = 0;
+              } catch {
+                // JSON still incomplete, continue accumulating and streaming text
+                console.log(
+                  `⏳ JSON incomplete, continuing real-time text extraction (${jsonBuffer.length} chars accumulated)`
+                );
               }
             }
-          } catch (error) {
-            console.error(`❌ Stream error:`, error);
-            controller.error(error);
+          } catch (e) {
+            console.error("❌ Error in stream processing:", e);
+            const errorEvent = `data: ${JSON.stringify({
+              content: {
+                parts: [
+                  {
+                    text: `Error processing response: ${
+                      e instanceof Error ? e.message : "Unknown error"
+                    }`,
+                  },
+                ],
+              },
+              author: "error",
+            })}\n\n`;
+            controller.enqueue(new TextEncoder().encode(errorEvent));
+            controller.close();
           }
         };
 
@@ -209,7 +244,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       },
     });
 
-    // Return the stream with proper headers
+    // Return SSE stream with proper headers
     return new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
@@ -221,11 +256,47 @@ export async function POST(request: NextRequest): Promise<Response> {
       },
     });
   } catch (error) {
-    console.error(`❌ API Route error:`, error);
+    console.error("❌ API Route error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
     );
+  }
+}
+
+// Extract new text content from JSON buffer using regex patterns
+function extractNewTextFromBuffer(
+  jsonBuffer: string,
+  alreadyExtractedLength: number
+): string {
+  try {
+    // Use regex to find text content in JSON, even if incomplete
+    // Pattern matches: "text": "content..."
+    const textPattern = /"text"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/g;
+    const matches = [];
+    let match;
+
+    // Extract all text matches
+    while ((match = textPattern.exec(jsonBuffer)) !== null) {
+      const textContent = match[1];
+      // Unescape JSON string content
+      const unescapedText = textContent.replace(/\\(.)/g, "$1");
+      matches.push(unescapedText);
+    }
+
+    // Combine all text content
+    const fullText = matches.join(" ");
+
+    // Return only the new portion that we haven't sent yet
+    if (fullText.length > alreadyExtractedLength) {
+      const newText = fullText.substring(alreadyExtractedLength);
+      return newText.trim();
+    }
+
+    return "";
+  } catch (error) {
+    console.error("❌ Error extracting text from buffer:", error);
+    return "";
   }
 }
 

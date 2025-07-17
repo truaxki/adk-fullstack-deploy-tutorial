@@ -543,10 +543,7 @@ export default function ChatInterface() {
   // Get event title for single agent (simplified from multi-agent version)
   const getEventTitle = (agentName: string): string => {
     // For single agent, focus on activity type rather than agent name
-    if (
-      agentName === "goal_planning_agent" ||
-      agentName === "goal-planning-agent"
-    ) {
+    if (agentName === "goal-planning-agent") {
       return "🎯 Planning Strategy";
     }
     if (agentName.includes("plan") || agentName.includes("planning")) {
@@ -657,7 +654,7 @@ export default function ChatInterface() {
       if (textParts.length > 0) {
         // Handle different agent types like the example app
         if (
-          agent === "goal_planning_agent" ||
+          agent === "goal-planning-agent" ||
           agent === "goal-planning-agent" ||
           agent === "interactive_planner_agent" ||
           agent === "root_agent"
