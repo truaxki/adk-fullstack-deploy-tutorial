@@ -4,7 +4,16 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ChatMessagesView } from "@/components/ChatMessagesView";
 import { ProcessedEvent } from "@/components/ActivityTimeline";
-import { Message, GoalInput } from "@/types";
+import { Message } from "@/types";
+
+// Type for stored session data
+interface StoredSession {
+  id: string;
+  userId: string;
+  title: string;
+  lastActivity: string;
+  messageCount: number;
+}
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -16,6 +25,146 @@ export default function ChatInterface() {
   const [websiteCount, setWebsiteCount] = useState<number>(0);
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
+
+  // User ID and session management state
+  const [userId, setUserId] = useState<string>("");
+
+  // Session storage key for localStorage
+  const getSessionStorageKey = (userId: string) => `chat_sessions_${userId}`;
+  const getMessagesStorageKey = (userId: string, sessionId: string) =>
+    `chat_messages_${userId}_${sessionId}`;
+
+  // Load sessions from localStorage (for local mode)
+  const loadSessionsFromStorage = useCallback((userId: string) => {
+    try {
+      const stored = localStorage.getItem(getSessionStorageKey(userId));
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error("Error loading sessions from storage:", error);
+      return [];
+    }
+  }, []);
+
+  // Save sessions to localStorage (for local mode)
+  const saveSessionsToStorage = useCallback(
+    (userId: string, sessions: StoredSession[]) => {
+      try {
+        localStorage.setItem(
+          getSessionStorageKey(userId),
+          JSON.stringify(sessions)
+        );
+      } catch (error) {
+        console.error("Error saving sessions to storage:", error);
+      }
+    },
+    []
+  );
+
+  // Load messages for a specific session
+  const loadMessagesFromStorage = useCallback(
+    (userId: string, sessionId: string) => {
+      try {
+        const stored = localStorage.getItem(
+          getMessagesStorageKey(userId, sessionId)
+        );
+        if (stored) {
+          const parsedMessages = JSON.parse(stored);
+          // Convert timestamp strings back to Date objects
+          return parsedMessages.map((msg: Message) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }));
+        }
+        return [];
+      } catch (error) {
+        console.error("Error loading messages from storage:", error);
+        return [];
+      }
+    },
+    []
+  );
+
+  // Save messages for a specific session
+  const saveMessagesToStorage = useCallback(
+    (userId: string, sessionId: string, messages: Message[]) => {
+      try {
+        localStorage.setItem(
+          getMessagesStorageKey(userId, sessionId),
+          JSON.stringify(messages)
+        );
+      } catch (error) {
+        console.error("Error saving messages to storage:", error);
+      }
+    },
+    []
+  );
+
+  // Generate session title from first message
+  const generateSessionTitle = useCallback((firstMessage: string): string => {
+    if (!firstMessage) return "New Session";
+
+    // Take first 30 characters and add ellipsis if longer
+    const truncated =
+      firstMessage.length > 30
+        ? firstMessage.substring(0, 30) + "..."
+        : firstMessage;
+
+    // Remove newlines and extra spaces
+    return truncated.replace(/\s+/g, " ").trim();
+  }, []);
+
+  // Handle session switching
+  const handleSessionSwitch = useCallback(
+    (newSessionId: string) => {
+      if (!userId || newSessionId === sessionId) return;
+
+      // Save current session messages before switching
+      if (sessionId && messages.length > 0) {
+        saveMessagesToStorage(userId, sessionId, messages);
+
+        // Update session in localStorage with latest activity
+        const storedSessions = loadSessionsFromStorage(userId);
+        const sessionIndex = storedSessions.findIndex(
+          (s: StoredSession) => s.id === sessionId
+        );
+        if (sessionIndex !== -1) {
+          storedSessions[sessionIndex] = {
+            ...storedSessions[sessionIndex],
+            lastActivity: new Date().toISOString(),
+            messageCount: messages.length,
+          };
+          saveSessionsToStorage(userId, storedSessions);
+        }
+      }
+
+      // Switch to new session
+      setSessionId(newSessionId);
+
+      // Load messages for new session
+      const sessionMessages = loadMessagesFromStorage(userId, newSessionId);
+      setMessages(sessionMessages);
+
+      // Clear events and website count for new session
+      setMessageEvents(new Map());
+      setWebsiteCount(0);
+    },
+    [
+      userId,
+      sessionId,
+      messages,
+      saveMessagesToStorage,
+      loadSessionsFromStorage,
+      saveSessionsToStorage,
+      loadMessagesFromStorage,
+    ]
+  );
+
+  // Update messages whenever they change (for persistence)
+  useEffect(() => {
+    if (userId && sessionId && messages.length > 0) {
+      saveMessagesToStorage(userId, sessionId, messages);
+    }
+  }, [userId, sessionId, messages, saveMessagesToStorage]);
 
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const accumulatedTextRef = useRef<string>("");
@@ -54,7 +203,7 @@ export default function ChatInterface() {
   // Backend health check (from example app)
   const checkBackendHealth = async (): Promise<boolean> => {
     try {
-      const response = await fetch("/api/goal-planning", {
+      const response = await fetch("/api/run_sse", {
         method: "OPTIONS",
         headers: {
           "Content-Type": "application/json",
@@ -95,6 +244,101 @@ export default function ChatInterface() {
 
     checkBackend();
   }, []);
+
+  // User ID management with localStorage persistence
+  useEffect(() => {
+    // Load user ID from localStorage on mount
+    const savedUserId = localStorage.getItem("agent-engine-user-id");
+    if (savedUserId) {
+      setUserId(savedUserId);
+    }
+  }, []);
+
+  // Handle user ID changes
+  const handleUserIdChange = useCallback((newUserId: string): void => {
+    setUserId(newUserId);
+  }, []);
+
+  // Handle user ID confirmation
+  const handleUserIdConfirm = useCallback((confirmedUserId: string): void => {
+    setUserId(confirmedUserId);
+    localStorage.setItem("agent-engine-user-id", confirmedUserId);
+  }, []);
+
+  // Handle new session creation
+  const handleCreateNewSession = useCallback(
+    async (sessionUserId: string, initialMessage?: string): Promise<void> => {
+      if (!sessionUserId) {
+        throw new Error("User ID is required to create a session");
+      }
+
+      // Generate random session ID using the GitHub gist approach
+      const randomPart =
+        Math.random().toString(36).substring(2, 10) +
+        Math.random().toString(36).substring(2, 10);
+      const newSessionId = `session-${randomPart}`;
+
+      // Generate session title from initial message or use default
+      const sessionTitle = initialMessage
+        ? generateSessionTitle(initialMessage)
+        : `Session ${newSessionId.slice(-8)}`;
+
+      // Create new session object
+      const newSession: StoredSession = {
+        id: newSessionId,
+        userId: sessionUserId,
+        title: sessionTitle,
+        lastActivity: new Date().toISOString(),
+        messageCount: 0,
+      };
+
+      // Save new session to localStorage
+      const storedSessions = loadSessionsFromStorage(sessionUserId);
+      const updatedSessions = [newSession, ...storedSessions];
+      saveSessionsToStorage(sessionUserId, updatedSessions);
+
+      // Switch to the new session
+      handleSessionSwitch(newSessionId);
+
+      // If there's an initial message, send it
+      if (initialMessage) {
+        // Use a direct API call to avoid circular dependency
+        setIsLoading(true);
+        try {
+          const response = await fetch("/api/run_sse", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              message: initialMessage,
+              userId: sessionUserId,
+              sessionId: newSessionId,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `API error: ${response.status} ${response.statusText}`
+            );
+          }
+
+          // Handle the response stream similar to handleSubmit
+          // For now, we'll just mark as not loading
+          setIsLoading(false);
+        } catch (error) {
+          console.error("Error sending initial message:", error);
+          setIsLoading(false);
+        }
+      }
+    },
+    [
+      generateSessionTitle,
+      loadSessionsFromStorage,
+      saveSessionsToStorage,
+      handleSessionSwitch,
+    ]
+  );
 
   // Enhanced SSE data extraction based on example app
   const extractDataFromSSE = (
@@ -427,13 +671,23 @@ export default function ChatInterface() {
 
   // Enhanced goal submission with retry logic and better error handling
   const handleSubmit = useCallback(
-    async (query: string): Promise<void> => {
+    async (
+      query: string,
+      requestUserId?: string,
+      requestSessionId?: string
+    ): Promise<void> => {
       if (!query.trim()) return;
+
+      // Use provided userId or current state
+      const currentUserId = requestUserId || userId;
+      if (!currentUserId) {
+        throw new Error("User ID is required to send messages");
+      }
 
       setIsLoading(true);
       try {
-        // Create session ID if not exists
-        let currentSessionId = sessionId;
+        // Use provided session ID or current state
+        let currentSessionId = requestSessionId || sessionId;
         if (!currentSessionId) {
           currentSessionId = uuidv4();
           setSessionId(currentSessionId);
@@ -463,23 +717,17 @@ export default function ChatInterface() {
 
         setMessages((prev) => [...prev, aiMessage]);
 
-        // Prepare goal input
-        const goalInput: GoalInput = {
-          title: query.substring(0, 100), // Use first 100 chars as title
-          description: query,
-        };
-
-        // Send to goal planning API with enhanced payload
+        // Send to Agent Engine API with enhanced payload
         const response = await retryWithBackoff(() =>
-          fetch("/api/goal-planning", {
+          fetch("/api/run_sse", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              goal: goalInput,
+              message: query,
+              userId: currentUserId,
               sessionId: currentSessionId,
-              userId: "user",
             }),
           })
         );
@@ -570,32 +818,7 @@ export default function ChatInterface() {
         setIsLoading(false);
       }
     },
-    [sessionId, processSseEventData]
-  );
-
-  // Load messages for a specific session
-  const loadSession = useCallback(
-    async (newSessionId: string): Promise<void> => {
-      try {
-        setIsLoading(true);
-        // Clear current messages and reset state
-        setMessages([]);
-        setMessageEvents(new Map());
-        setWebsiteCount(0);
-
-        console.log(`Loading session: ${newSessionId}`);
-
-        // Reset accumulated text and agent
-        accumulatedTextRef.current = "";
-        currentAgentRef.current = "";
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Error loading session:", error);
-        setIsLoading(false);
-      }
-    },
-    []
+    [sessionId, userId, processSseEventData]
   );
 
   // Auto-scroll to bottom when new messages arrive
@@ -714,10 +937,13 @@ export default function ChatInterface() {
               onSubmit={handleSubmit}
               onCancel={handleCancel}
               sessionId={sessionId}
-              onSessionIdChange={setSessionId}
-              onLoadSession={loadSession}
+              onSessionIdChange={handleSessionSwitch}
               messageEvents={messageEvents}
               websiteCount={websiteCount}
+              userId={userId}
+              onUserIdChange={handleUserIdChange}
+              onUserIdConfirm={handleUserIdConfirm}
+              onCreateSession={handleCreateNewSession}
             />
           )}
         </div>

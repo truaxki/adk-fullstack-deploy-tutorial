@@ -192,14 +192,40 @@ export function shouldUseAgentEngine(): boolean {
 }
 
 /**
- * Gets the appropriate endpoint for a given API path
+ * Agent Engine endpoint types
  */
-export function getEndpointForPath(path: string): string {
+export type AgentEngineEndpointType = "query" | "streamQuery";
+
+/**
+ * Gets the appropriate endpoint for a given API path and operation type
+ */
+export function getEndpointForPath(
+  path: string,
+  endpointType: AgentEngineEndpointType = "query"
+): string {
   if (shouldUseAgentEngine()) {
-    // For Agent Engine, we need to use the query endpoint
-    return `${endpointConfig.agentEngineUrl}:query`;
+    // For Agent Engine, return the appropriate endpoint based on operation type
+    if (endpointType === "streamQuery") {
+      return `${endpointConfig.agentEngineUrl}:streamQuery?alt=sse`;
+    } else {
+      return `${endpointConfig.agentEngineUrl}:query`;
+    }
   }
 
   // For other deployments, append the path to the backend URL
   return `${endpointConfig.backendUrl}${path}`;
+}
+
+/**
+ * Gets the Agent Engine query endpoint for session management operations
+ */
+export function getAgentEngineQueryEndpoint(): string {
+  return getEndpointForPath("", "query");
+}
+
+/**
+ * Gets the Agent Engine streaming endpoint for chat responses
+ */
+export function getAgentEngineStreamEndpoint(): string {
+  return getEndpointForPath("", "streamQuery");
 }

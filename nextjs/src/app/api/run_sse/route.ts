@@ -1,7 +1,11 @@
+// https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/use/overview#requests_3
+// https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/use/adk#get-session
+
 import { NextRequest } from "next/server";
 import {
   endpointConfig,
-  getEndpointForPath,
+  getAgentEngineQueryEndpoint,
+  getAgentEngineStreamEndpoint,
   shouldUseAgentEngine,
   getAuthHeaders,
 } from "@/lib/config";
@@ -28,72 +32,206 @@ export async function POST(request: NextRequest): Promise<Response> {
     // Parse the request body
     const requestBody = await request.json();
 
-    // Get the appropriate endpoint based on deployment type
-    const endpoint = getEndpointForPath("/run_sse");
+    // Get the appropriate endpoints based on deployment type
+    const sessionEndpoint = shouldUseAgentEngine()
+      ? getAgentEngineQueryEndpoint()
+      : `${endpointConfig.backendUrl}/run_sse`;
+    const streamEndpoint = shouldUseAgentEngine()
+      ? getAgentEngineStreamEndpoint()
+      : `${endpointConfig.backendUrl}/run_sse`;
 
     // Log endpoint configuration in development
     if (process.env.NODE_ENV === "development") {
-      console.log(`📡 Run SSE API - Using endpoint: ${endpoint}`);
+      console.log(`📡 Run SSE API - Session endpoint: ${sessionEndpoint}`);
+      console.log(`📡 Run SSE API - Stream endpoint: ${streamEndpoint}`);
       console.log(`📡 Deployment type: ${endpointConfig.deploymentType}`);
     }
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
-      // For Agent Engine, convert the request to query format
-      const agentEnginePayload = {
-        input: {
-          query: requestBody.query || requestBody.message || "",
-          sessionId: requestBody.sessionId,
-          userId: requestBody.userId,
-        },
-      };
+      // Check if this is a session listing request
+      if (requestBody.action === "list_sessions") {
+        const userId = requestBody.userId;
+        if (!userId) {
+          return new Response(
+            JSON.stringify({
+              error: "User ID is required for listing sessions",
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
 
-      // Forward the request to Agent Engine
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          ...authHeaders,
-          "Content-Type": "application/json",
-          // Forward any authentication headers if present
-          ...(request.headers.get("authorization") && {
-            authorization: request.headers.get("authorization")!,
-          }),
-        },
-        body: JSON.stringify(agentEnginePayload),
-      });
+        const listSessionsPayload = {
+          class_method: "list_sessions",
+          input: {
+            user_id: userId,
+          },
+        };
 
-      if (!response.ok) {
+        const authHeaders = await getAuthHeaders();
+        const listResponse = await fetch(sessionEndpoint, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(listSessionsPayload),
+        });
+
+        if (!listResponse.ok) {
+          const errorText = await listResponse.text();
+          console.error(
+            `Agent Engine List Sessions Error: ${listResponse.status} ${listResponse.statusText}`,
+            errorText
+          );
+          return new Response(
+            JSON.stringify({ error: `Failed to list sessions: ${errorText}` }),
+            {
+              status: listResponse.status,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        const sessionData = await listResponse.json();
         return new Response(
-          JSON.stringify({
-            error: `Agent Engine error: ${response.status} ${response.statusText}`,
-          }),
+          JSON.stringify(sessionData.output || { sessions: [] }),
           {
-            status: response.status,
+            status: 200,
             headers: { "Content-Type": "application/json" },
           }
         );
       }
 
-      // Handle Agent Engine response format and convert to SSE
-      const agentResponse = await response.json();
+      // For Agent Engine, use the session-based API structure for messages
+      const userId = requestBody.userId || `user-${Date.now()}`;
+      const message = requestBody.query || requestBody.message || "";
 
-      // Convert Agent Engine response to SSE format
-      const sseData = {
-        content: {
-          parts: [
-            { text: agentResponse.output || agentResponse.response || "" },
-          ],
+      // Check if we already have a session ID from the request
+      let sessionId = requestBody.sessionId;
+
+      // If no session ID provided, create a new session
+      if (!sessionId) {
+        const createSessionPayload = {
+          class_method: "create_session",
+          input: {
+            user_id: userId,
+          },
+        };
+
+        const authHeaders = await getAuthHeaders();
+        const createSessionResponse = await fetch(sessionEndpoint, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(createSessionPayload),
+        });
+
+        if (!createSessionResponse.ok) {
+          const errorText = await createSessionResponse.text();
+          console.error(
+            `Agent Engine Session Creation Error: ${createSessionResponse.status} ${createSessionResponse.statusText}`,
+            errorText
+          );
+          return new Response(
+            JSON.stringify({
+              error: `Agent Engine Session Creation Error: ${errorText}`,
+            }),
+            {
+              status: createSessionResponse.status,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        const sessionData = await createSessionResponse.json();
+        sessionId = sessionData.output?.id;
+
+        if (!sessionId) {
+          console.error("No session ID returned from Agent Engine");
+          return new Response(
+            JSON.stringify({
+              error: "Failed to create session: No session ID returned",
+            }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+      }
+
+      // Now stream the query to the session
+      const streamQueryPayload = {
+        class_method: "stream_query",
+        input: {
+          user_id: userId,
+          session_id: sessionId,
+          message: message,
         },
       };
 
-      // Return as SSE stream
+      // Use the streaming endpoint (already defined above)
+      const streamAuthHeaders = await getAuthHeaders();
+
+      const streamResponse = await fetch(streamEndpoint, {
+        method: "POST",
+        headers: {
+          ...streamAuthHeaders,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(streamQueryPayload),
+      });
+
+      if (!streamResponse.ok) {
+        const errorText = await streamResponse.text();
+        console.error(
+          `Agent Engine Stream Error: ${streamResponse.status} ${streamResponse.statusText}`,
+          errorText
+        );
+        return new Response(
+          JSON.stringify({
+            error: `Agent Engine Stream Error: ${errorText}`,
+          }),
+          {
+            status: streamResponse.status,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Handle Agent Engine SSE response - forward the stream directly
       const stream = new ReadableStream({
         start(controller) {
-          const chunk = `data: ${JSON.stringify(sseData)}\n\n`;
-          const encodedChunk = new TextEncoder().encode(chunk);
-          controller.enqueue(encodedChunk);
-          controller.close();
+          if (!streamResponse.body) {
+            controller.close();
+            return;
+          }
+
+          const reader = streamResponse.body.getReader();
+          const decoder = new TextDecoder();
+
+          async function pump() {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+
+                // Forward the SSE chunk as-is
+                controller.enqueue(new TextEncoder().encode(chunk));
+              }
+            } catch (error) {
+              console.error("Error reading Agent Engine stream:", error);
+            } finally {
+              controller.close();
+            }
+          }
+
+          pump();
         },
       });
 
@@ -109,17 +247,67 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     } else {
       // For regular backend deployment (local or Cloud Run)
+
+      // Transform the request body to match ADK backend format
+      const userId = requestBody.userId || `user-${Date.now()}`;
+      const sessionId = requestBody.sessionId || `session-${Date.now()}`;
+      const message = requestBody.query || requestBody.message || "";
+
+      // First, create or ensure session exists
+      const sessionEndpoint = `${endpointConfig.backendUrl}/apps/app/users/${userId}/sessions/${sessionId}`;
+
+      try {
+        const sessionAuthHeaders = await getAuthHeaders();
+        const sessionResponse = await fetch(sessionEndpoint, {
+          method: "POST",
+          headers: {
+            ...sessionAuthHeaders,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+
+        if (!sessionResponse.ok && sessionResponse.status !== 409) {
+          console.error(
+            "Session creation failed:",
+            sessionResponse.status,
+            await sessionResponse.text()
+          );
+        } else {
+          console.log("Session created/verified successfully");
+        }
+      } catch (sessionError) {
+        console.error("Session creation error:", sessionError);
+      }
+
+      // Prepare the ADK payload matching the expected format
+      const adkPayload = {
+        appName: "app",
+        userId: userId,
+        sessionId: sessionId,
+        newMessage: {
+          parts: [
+            {
+              text: message,
+            },
+          ],
+          role: "user",
+        },
+        streaming: true,
+      };
+
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(endpoint, {
+      const response = await fetch(`${endpointConfig.backendUrl}/run_sse`, {
         method: "POST",
         headers: {
           ...authHeaders,
+          "Content-Type": "application/json",
           // Forward any authentication headers if present
           ...(request.headers.get("authorization") && {
             authorization: request.headers.get("authorization")!,
           }),
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(adkPayload),
       });
 
       if (!response.ok) {

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { InputForm } from "@/components/InputForm";
+import { UserIdInput } from "@/components/chat/UserIdInput";
+import { SessionSelector } from "@/components/chat/SessionSelector";
 import {
   Copy,
   CopyCheck,
@@ -30,10 +32,16 @@ interface ChatMessagesViewProps {
   onCancel: () => void;
   sessionId: string;
   onSessionIdChange: (sessionId: string) => void;
-  onLoadSession?: (sessionId: string) => void;
   displayData?: string | null;
   messageEvents?: Map<string, ProcessedEvent[]>;
   websiteCount?: number;
+  userId: string;
+  onUserIdChange: (newUserId: string) => void;
+  onUserIdConfirm: (confirmedUserId: string) => void;
+  onCreateSession: (
+    sessionUserId: string,
+    initialMessage?: string
+  ) => Promise<void>;
 }
 
 // Enhanced markdown components for better styling
@@ -401,54 +409,19 @@ export function ChatMessagesView({
   onCancel,
   sessionId,
   onSessionIdChange,
-  onLoadSession,
   messageEvents,
   websiteCount,
+  userId,
+  onUserIdChange,
+  onUserIdConfirm,
+  onCreateSession,
 }: ChatMessagesViewProps): React.JSX.Element {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [isEditingSessionId, setIsEditingSessionId] = useState(false);
-  const [tempSessionId, setTempSessionId] = useState(sessionId);
-
-  useEffect(() => {
-    setTempSessionId(sessionId);
-  }, [sessionId]);
 
   const handleCopy = async (text: string, messageId: string): Promise<void> => {
     await navigator.clipboard.writeText(text);
     setCopiedMessageId(messageId);
     setTimeout(() => setCopiedMessageId(null), 2000);
-  };
-
-  const handleNewChat = (): void => {
-    const newSessionId = crypto.randomUUID();
-    onSessionIdChange(newSessionId);
-    onLoadSession?.(newSessionId);
-  };
-
-  const handleSessionIdEdit = (): void => {
-    setTempSessionId(sessionId);
-    setIsEditingSessionId(true);
-  };
-
-  const handleSessionIdSave = (): void => {
-    if (tempSessionId.trim()) {
-      onSessionIdChange(tempSessionId.trim());
-      onLoadSession?.(tempSessionId.trim());
-    }
-    setIsEditingSessionId(false);
-  };
-
-  const handleSessionIdCancel = (): void => {
-    setTempSessionId(sessionId);
-    setIsEditingSessionId(false);
-  };
-
-  const handleSessionIdKeyPress = (e: React.KeyboardEvent): void => {
-    if (e.key === "Enter") {
-      handleSessionIdSave();
-    } else if (e.key === "Escape") {
-      handleSessionIdCancel();
-    }
   };
 
   // Find the ID of the last AI message
@@ -479,55 +452,24 @@ export function ChatMessagesView({
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Session ID Display/Edit */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Session:</span>
-              {isEditingSessionId ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={tempSessionId}
-                    onChange={(e) => setTempSessionId(e.target.value)}
-                    onKeyDown={handleSessionIdKeyPress}
-                    className="bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded border border-slate-600 focus:border-emerald-500 focus:outline-none w-64"
-                    placeholder="Enter session ID..."
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleSessionIdSave}
-                    className="text-xs text-emerald-400 hover:text-emerald-300"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={handleSessionIdCancel}
-                    className="text-xs text-slate-400 hover:text-slate-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-300 font-mono bg-slate-700/50 px-2 py-1 rounded">
-                    {sessionId || "No session"}
-                  </span>
-                  <button
-                    onClick={handleSessionIdEdit}
-                    className="text-xs text-slate-400 hover:text-slate-300"
-                  >
-                    Edit
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* User ID Management */}
+            <UserIdInput
+              currentUserId={userId}
+              onUserIdChange={onUserIdChange}
+              onUserIdConfirm={onUserIdConfirm}
+              className="text-xs"
+            />
 
-            <Button
-              onClick={handleNewChat}
-              variant="outline"
-              className="bg-slate-700/50 hover:bg-slate-700 text-slate-200 border-slate-600/50 hover:border-slate-500 transition-colors"
-            >
-              New Chat
-            </Button>
+            {/* Session Management */}
+            {userId && (
+              <SessionSelector
+                currentUserId={userId}
+                currentSessionId={sessionId}
+                onSessionSelect={onSessionIdChange}
+                onCreateSession={onCreateSession}
+                className="text-xs"
+              />
+            )}
           </div>
         </div>
       </div>
