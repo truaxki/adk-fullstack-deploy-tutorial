@@ -276,16 +276,48 @@ export default function ChatInterface() {
       const randomPart =
         Math.random().toString(36).substring(2, 10) +
         Math.random().toString(36).substring(2, 10);
-      const newSessionId = `session-${randomPart}`;
+      const requestedSessionId = `session-${randomPart}`;
+
+      // First, create the session via the API to get the actual session ID
+      let actualSessionId = requestedSessionId;
+      try {
+        const sessionResponse = await fetch(
+          `/api/apps/app/users/${sessionUserId}/sessions/${requestedSessionId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (sessionResponse.ok) {
+          const sessionData = await sessionResponse.json();
+          // For Agent Engine, use the actual session ID returned by the backend
+          actualSessionId = sessionData.sessionId || requestedSessionId;
+          console.log(
+            `Session created: requested=${requestedSessionId}, actual=${actualSessionId}`
+          );
+        } else {
+          console.warn(
+            "Session creation API failed, using requested ID:",
+            sessionResponse.status
+          );
+          // Fall back to using the requested ID
+        }
+      } catch (error) {
+        console.warn("Session creation API error, using requested ID:", error);
+        // Fall back to using the requested ID
+      }
 
       // Generate session title from initial message or use default
       const sessionTitle = initialMessage
         ? generateSessionTitle(initialMessage)
-        : `Session ${newSessionId.slice(-8)}`;
+        : `Session ${actualSessionId.slice(-8)}`;
 
-      // Create new session object
+      // Create new session object with the actual session ID
       const newSession: StoredSession = {
-        id: newSessionId,
+        id: actualSessionId,
         userId: sessionUserId,
         title: sessionTitle,
         lastActivity: new Date().toISOString(),
@@ -297,8 +329,8 @@ export default function ChatInterface() {
       const updatedSessions = [newSession, ...storedSessions];
       saveSessionsToStorage(sessionUserId, updatedSessions);
 
-      // Switch to the new session
-      handleSessionSwitch(newSessionId);
+      // Switch to the new session using the actual session ID
+      handleSessionSwitch(actualSessionId);
 
       // If there's an initial message, send it
       if (initialMessage) {
@@ -313,7 +345,7 @@ export default function ChatInterface() {
             body: JSON.stringify({
               message: initialMessage,
               userId: sessionUserId,
-              sessionId: newSessionId,
+              sessionId: actualSessionId,
             }),
           });
 

@@ -28,37 +28,45 @@ export interface AgentEngineResponse {
 
 /**
  * Gets the access token for Google Cloud API authentication
- * In cloud environments, this uses the service account attached to the service
- * In local environments, this uses application default credentials
+ * Uses the same authentication approach as the main config
  */
 async function getAccessToken(): Promise<string> {
   try {
-    // In cloud environments (Cloud Run, Agent Engine), use the metadata server
-    if (process.env.GOOGLE_CLOUD_PROJECT || process.env.K_SERVICE) {
-      const response = await fetch(
-        "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-        {
-          headers: {
-            "Metadata-Flavor": "Google",
-          },
-        }
-      );
+    // Use base64-encoded service account key from environment variables (for Vercel deployment)
+    const serviceAccountKeyBase64 =
+      process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64;
 
-      if (response.ok) {
-        const data = await response.json();
-        return data.access_token;
-      }
+    if (!serviceAccountKeyBase64) {
+      throw new Error(
+        "GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 environment variable is required for Agent Engine deployment"
+      );
     }
 
-    // For local development, we'll need to handle this differently
-    // In a real implementation, you'd use the Google Auth library
-    console.warn(
-      "No access token available. Using empty token for local development."
-    );
-    return "";
+    // Decode the base64-encoded service account key
+    const serviceAccountKeyJson = Buffer.from(
+      serviceAccountKeyBase64,
+      "base64"
+    ).toString("utf-8");
+    const credentials = JSON.parse(serviceAccountKeyJson);
+
+    // Use the service account to get an access token
+    const { GoogleAuth } = await import("google-auth-library");
+    const auth = new GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    });
+
+    const authClient = await auth.getClient();
+    const accessToken = await authClient.getAccessToken();
+
+    if (!accessToken.token) {
+      throw new Error("Failed to get access token");
+    }
+
+    return accessToken.token;
   } catch (error) {
     console.error("Error getting access token:", error);
-    return "";
+    throw new Error("Authentication failed");
   }
 }
 
@@ -166,8 +174,7 @@ export async function queryAgentEngine(query: AgentEngineQuery): Promise<{
 }
 
 /**
- * Streams a query to Agent Engine and returns a ReadableStream
- * Note: Agent Engine may not support streaming, so we'll simulate it
+ * Streams a query to Agent Engine using the real streaming endpoint
  */
 export async function streamAgentEngineQuery(
   query: AgentEngineQuery
@@ -175,33 +182,82 @@ export async function streamAgentEngineQuery(
   return new ReadableStream({
     async start(controller) {
       try {
-        const result = await queryAgentEngine(query);
+        if (!endpointConfig.agentEngineUrl) {
+          throw new Error("Agent Engine URL not configured");
+        }
 
-        if (result.success) {
-          // Convert response to SSE format
-          const sseData = {
-            content: {
-              parts: [{ text: result.text }],
+        const accessToken = await getAccessToken();
+        const streamQueryPayload = {
+          class_method: "stream_query",
+          input: {
+            user_id: query.userId || "user",
+            session_id: query.sessionId || "session",
+            message: query.query,
+          },
+        };
+
+        const response = await fetch(
+          `${endpointConfig.agentEngineUrl}:streamQuery?alt=sse`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+              "X-Goog-User-Project": process.env.GOOGLE_CLOUD_PROJECT || "",
             },
-          };
+            body: JSON.stringify(streamQueryPayload),
+          }
+        );
 
-          const chunk = `data: ${JSON.stringify(sseData)}\n\n`;
-          const encodedChunk = new TextEncoder().encode(chunk);
-          controller.enqueue(encodedChunk);
-        } else {
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Agent Engine streaming error:", {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+          });
+
           // Send error as SSE
           const errorData = {
-            error: result.error || "Unknown error",
+            error: `Agent Engine streaming error: ${response.status} ${response.statusText}`,
           };
-
           const chunk = `data: ${JSON.stringify(errorData)}\n\n`;
           const encodedChunk = new TextEncoder().encode(chunk);
           controller.enqueue(encodedChunk);
+          controller.close();
+          return;
         }
 
-        controller.close();
+        // Stream the real response
+        if (!response.body) {
+          controller.close();
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        async function pump() {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value, { stream: true });
+              // Forward the SSE chunk as-is
+              controller.enqueue(new TextEncoder().encode(chunk));
+            }
+          } catch (error) {
+            console.error("Error reading Agent Engine stream:", error);
+            controller.error(error);
+          } finally {
+            controller.close();
+          }
+        }
+
+        pump();
       } catch (error) {
-        console.error("Error streaming Agent Engine query:", error);
+        console.error("Error setting up Agent Engine stream:", error);
         controller.error(error);
       }
     },

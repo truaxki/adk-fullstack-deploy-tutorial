@@ -66,7 +66,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // Prepare session and user IDs
-    const sessionId = requestBody.sessionId || `session-${Date.now()}`;
+    let sessionId = requestBody.sessionId || `session-${Date.now()}`;
     const userId = requestBody.userId || "user";
 
     // Log endpoint configuration in development
@@ -78,69 +78,106 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
-      // For Agent Engine, use the query format
-      const agentEnginePayload = {
+      // For Agent Engine, first create or ensure session exists
+      const sessionEndpoint = getEndpointForPath("", "query");
+      const streamEndpoint = getEndpointForPath("", "streamQuery");
+
+      // Create session if needed
+      const createSessionPayload = {
+        class_method: "create_session",
         input: {
-          query: `Goal: ${requestBody.goal.title}\n\nDescription: ${requestBody.goal.description}`,
-          sessionId: sessionId,
-          userId: userId,
+          user_id: userId,
         },
       };
 
-      // Get the appropriate endpoint based on deployment type
-      const endpoint = getEndpointForPath("/run");
-
-      // Forward the request to Agent Engine
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(endpoint, {
+      try {
+        const createSessionResponse = await fetch(sessionEndpoint, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(createSessionPayload),
+        });
+
+        if (createSessionResponse.ok) {
+          const sessionData = await createSessionResponse.json();
+          const actualSessionId = sessionData.output?.id;
+          if (actualSessionId) {
+            sessionId = actualSessionId;
+          }
+        }
+      } catch (sessionError) {
+        console.warn("Session creation warning:", sessionError);
+        // Continue with original sessionId
+      }
+
+      // Now stream the goal planning query
+      const streamQueryPayload = {
+        class_method: "stream_query",
+        input: {
+          user_id: userId,
+          session_id: sessionId,
+          message: `Goal: ${requestBody.goal.title}\n\nDescription: ${requestBody.goal.description}`,
+        },
+      };
+
+      const streamResponse = await fetch(streamEndpoint, {
         method: "POST",
         headers: {
           ...authHeaders,
           "Content-Type": "application/json",
-          // Forward any authentication headers if present
-          ...(request.headers.get("authorization") && {
-            authorization: request.headers.get("authorization")!,
-          }),
         },
-        body: JSON.stringify(agentEnginePayload),
+        body: JSON.stringify(streamQueryPayload),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!streamResponse.ok) {
+        const errorText = await streamResponse.text();
         console.error(
-          "Agent Engine error:",
-          response.status,
-          response.statusText,
+          "Agent Engine stream error:",
+          streamResponse.status,
+          streamResponse.statusText,
           errorText
         );
         return NextResponse.json(
           {
             success: false,
-            error: `Agent Engine error: ${response.status} ${response.statusText}`,
+            error: `Agent Engine stream error: ${streamResponse.status} ${streamResponse.statusText}`,
           } as ApiResponse<never>,
-          { status: response.status }
+          { status: streamResponse.status }
         );
       }
 
-      // Handle Agent Engine response format
-      const agentResponse = await response.json();
-
-      // Convert Agent Engine response to SSE format
-      const sseData = {
-        content: {
-          parts: [
-            { text: agentResponse.output || agentResponse.response || "" },
-          ],
-        },
-      };
-
-      // Return as SSE stream
+      // Forward the real streaming response
       const stream = new ReadableStream({
         start(controller) {
-          const chunk = `data: ${JSON.stringify(sseData)}\n\n`;
-          const encodedChunk = new TextEncoder().encode(chunk);
-          controller.enqueue(encodedChunk);
-          controller.close();
+          if (!streamResponse.body) {
+            controller.close();
+            return;
+          }
+
+          const reader = streamResponse.body.getReader();
+          const decoder = new TextDecoder();
+
+          async function pump() {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                // Forward the SSE chunk as-is from Agent Engine
+                controller.enqueue(new TextEncoder().encode(chunk));
+              }
+            } catch (error) {
+              console.error("Error reading Agent Engine stream:", error);
+            } finally {
+              controller.close();
+            }
+          }
+
+          pump();
         },
       });
 

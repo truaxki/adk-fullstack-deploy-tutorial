@@ -25,22 +25,68 @@ export async function POST(
       `/apps/app/users/${userId}/sessions/${sessionId}`
     );
 
-    // Log endpoint configuration in development
-    if (process.env.NODE_ENV === "development") {
-      console.log(`📡 Session API - Using endpoint: ${endpoint}`);
-      console.log(`📡 Deployment type: ${endpointConfig.deploymentType}`);
-    }
+    // Log endpoint configuration
+    console.log(`📡 Session API - Using endpoint: ${endpoint}`);
+    console.log(`📡 Deployment type: ${endpointConfig.deploymentType}`);
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
-      // For Agent Engine, session management is handled differently
-      // Return a simple session creation response
+      // For Agent Engine, actually create a session using the proper API
+      const createSessionPayload = {
+        class_method: "create_session",
+        input: {
+          user_id: userId,
+        },
+      };
+
+      const authHeaders = await getAuthHeaders();
+      const createSessionResponse = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(createSessionPayload),
+      });
+
+      if (!createSessionResponse.ok) {
+        const errorText = await createSessionResponse.text();
+        console.error(
+          `Agent Engine Session Creation Error: ${createSessionResponse.status} ${createSessionResponse.statusText}`,
+          errorText
+        );
+        return NextResponse.json(
+          {
+            error: `Agent Engine Session Creation Error: ${errorText}`,
+            deploymentType: endpointConfig.deploymentType,
+            timestamp: new Date().toISOString(),
+          },
+          { status: createSessionResponse.status }
+        );
+      }
+
+      const sessionData = await createSessionResponse.json();
+      const actualSessionId = sessionData.output?.id;
+
+      if (!actualSessionId) {
+        console.error("No session ID returned from Agent Engine");
+        return NextResponse.json(
+          {
+            error: "Failed to create session: No session ID returned",
+            deploymentType: endpointConfig.deploymentType,
+            timestamp: new Date().toISOString(),
+          },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({
-        sessionId: sessionId,
+        sessionId: actualSessionId,
         userId: userId,
         status: "created",
         deploymentType: endpointConfig.deploymentType,
         timestamp: new Date().toISOString(),
+        originalRequestedSessionId: sessionId,
       });
     } else {
       // For regular backend deployment (local or Cloud Run)
