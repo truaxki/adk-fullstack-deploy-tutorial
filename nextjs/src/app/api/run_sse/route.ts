@@ -270,7 +270,7 @@ function extractNewTextFromBuffer(
   alreadyExtractedLength: number
 ): string {
   try {
-    // Extract only non-thought text content from JSON parts
+    // Extract ALL text content from JSON parts (including thoughts for transparency)
     const allTextMatches: string[] = [];
 
     // Find all parts in the content.parts array
@@ -285,17 +285,7 @@ function extractNewTextFromBuffer(
       let partMatch;
 
       while ((partMatch = partPattern.exec(partsContent)) !== null) {
-        const fullPartText = partMatch[0];
         const textContent = partMatch[1];
-
-        // Skip if this part has "thought": true
-        if (/"thought"\s*:\s*true/.test(fullPartText)) {
-          console.log(
-            "🤔 Skipping thought text:",
-            textContent.substring(0, 50) + "..."
-          );
-          continue;
-        }
 
         // Unescape JSON string content properly
         const unescapedText = textContent
@@ -307,13 +297,13 @@ function extractNewTextFromBuffer(
 
         allTextMatches.push(unescapedText);
         console.log(
-          "📝 Found non-thought text:",
+          "📝 Found text content:",
           unescapedText.substring(0, 50) + "..."
         );
       }
     }
 
-    // Combine all non-thought text content
+    // Combine all text content (thoughts + regular text)
     const fullText = allTextMatches.join(" ");
     console.log(
       `📊 Total extracted text: ${fullText.length} chars, already sent: ${alreadyExtractedLength} chars`
