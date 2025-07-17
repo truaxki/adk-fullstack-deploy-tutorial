@@ -28,6 +28,9 @@ export async function POST(
     // Log endpoint configuration
     console.log(`📡 Session API - Using endpoint: ${endpoint}`);
     console.log(`📡 Deployment type: ${endpointConfig.deploymentType}`);
+    console.log(
+      `📡 Creating session for userId: ${userId}, sessionId: ${sessionId}`
+    );
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
@@ -39,6 +42,11 @@ export async function POST(
         },
       };
 
+      console.log(
+        `🚀 Creating Agent Engine session with payload:`,
+        JSON.stringify(createSessionPayload, null, 2)
+      );
+
       const authHeaders = await getAuthHeaders();
       const createSessionResponse = await fetch(endpoint, {
         method: "POST",
@@ -49,10 +57,14 @@ export async function POST(
         body: JSON.stringify(createSessionPayload),
       });
 
+      console.log(
+        `📡 Agent Engine session creation response status: ${createSessionResponse.status} ${createSessionResponse.statusText}`
+      );
+
       if (!createSessionResponse.ok) {
         const errorText = await createSessionResponse.text();
         console.error(
-          `Agent Engine Session Creation Error: ${createSessionResponse.status} ${createSessionResponse.statusText}`,
+          `❌ Agent Engine Session Creation Error: ${createSessionResponse.status} ${createSessionResponse.statusText}`,
           errorText
         );
         return NextResponse.json(
@@ -66,10 +78,18 @@ export async function POST(
       }
 
       const sessionData = await createSessionResponse.json();
+      console.log(
+        `📄 Agent Engine session creation response:`,
+        JSON.stringify(sessionData, null, 2)
+      );
+
       const actualSessionId = sessionData.output?.id;
 
       if (!actualSessionId) {
-        console.error("No session ID returned from Agent Engine");
+        console.error(
+          "❌ No session ID returned from Agent Engine. Full response:",
+          sessionData
+        );
         return NextResponse.json(
           {
             error: "Failed to create session: No session ID returned",
@@ -79,6 +99,10 @@ export async function POST(
           { status: 500 }
         );
       }
+
+      console.log(
+        `✅ Agent Engine session created successfully: ${actualSessionId}`
+      );
 
       return NextResponse.json({
         sessionId: actualSessionId,

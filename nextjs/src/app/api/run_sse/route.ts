@@ -41,12 +41,13 @@ export async function POST(request: NextRequest): Promise<Response> {
       ? getAgentEngineStreamEndpoint()
       : `${endpointConfig.backendUrl}/run_sse`;
 
-    // Log endpoint configuration in development
-    if (process.env.NODE_ENV === "development") {
-      console.log(`📡 Run SSE API - Session endpoint: ${sessionEndpoint}`);
-      console.log(`📡 Run SSE API - Stream endpoint: ${streamEndpoint}`);
-      console.log(`📡 Deployment type: ${endpointConfig.deploymentType}`);
-    }
+    // Log endpoint configuration (always log in production for debugging)
+    console.log(`📡 Run SSE API - Session endpoint: ${sessionEndpoint}`);
+    console.log(`📡 Run SSE API - Stream endpoint: ${streamEndpoint}`);
+    console.log(`📡 Deployment type: ${endpointConfig.deploymentType}`);
+    console.log(`📡 Request body:`, JSON.stringify(requestBody, null, 2));
+    console.log(`📡 Should use Agent Engine: ${shouldUseAgentEngine()}`);
+    console.log(`📡 user id: ${requestBody.userId}`);
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
@@ -174,6 +175,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         },
       };
 
+      console.log(
+        `🚀 Starting Agent Engine stream query for session: ${sessionId}`
+      );
+      console.log(
+        `📤 Stream payload:`,
+        JSON.stringify(streamQueryPayload, null, 2)
+      );
+
       // Use the streaming endpoint (already defined above)
       const streamAuthHeaders = await getAuthHeaders();
 
@@ -186,10 +195,18 @@ export async function POST(request: NextRequest): Promise<Response> {
         body: JSON.stringify(streamQueryPayload),
       });
 
+      console.log(
+        `📡 Agent Engine stream response status: ${streamResponse.status} ${streamResponse.statusText}`
+      );
+      console.log(
+        `📡 Response headers:`,
+        Object.fromEntries(streamResponse.headers.entries())
+      );
+
       if (!streamResponse.ok) {
         const errorText = await streamResponse.text();
         console.error(
-          `Agent Engine Stream Error: ${streamResponse.status} ${streamResponse.statusText}`,
+          `❌ Agent Engine Stream Error: ${streamResponse.status} ${streamResponse.statusText}`,
           errorText
         );
         return new Response(
@@ -204,30 +221,50 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       // Handle Agent Engine SSE response - forward the stream directly
+      console.log(`🌊 Setting up stream forwarding...`);
+
       const stream = new ReadableStream({
         start(controller) {
           if (!streamResponse.body) {
+            console.log(`❌ No response body from Agent Engine`);
             controller.close();
             return;
           }
 
+          console.log(
+            `✅ Agent Engine response body exists, starting stream reader...`
+          );
           const reader = streamResponse.body.getReader();
           const decoder = new TextDecoder();
+          let chunkCount = 0;
 
           async function pump() {
             try {
               while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
 
+                if (done) {
+                  console.log(`🏁 Stream complete after ${chunkCount} chunks`);
+                  break;
+                }
+
+                chunkCount++;
                 const chunk = decoder.decode(value, { stream: true });
+                console.log(
+                  `📦 Chunk ${chunkCount} received (${chunk.length} bytes):`,
+                  chunk.substring(0, 200) + (chunk.length > 200 ? "..." : "")
+                );
 
                 // Forward the SSE chunk as-is
                 controller.enqueue(new TextEncoder().encode(chunk));
+                console.log(`✅ Chunk ${chunkCount} forwarded to client`);
               }
             } catch (error) {
-              console.error("Error reading Agent Engine stream:", error);
+              console.error("❌ Error reading Agent Engine stream:", error);
             } finally {
+              console.log(
+                `🔚 Closing stream controller after ${chunkCount} chunks`
+              );
               controller.close();
             }
           }

@@ -47,6 +47,7 @@ class AgentEngineApp(AdkApp):
         )
         provider.add_span_processor(processor)
         trace.set_tracer_provider(provider)
+        self.enable_tracing = True
 
     def register_feedback(self, feedback: dict[str, Any]) -> None:
         """Collect and log feedback from users."""

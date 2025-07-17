@@ -69,12 +69,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     let sessionId = requestBody.sessionId || `session-${Date.now()}`;
     const userId = requestBody.userId || "user";
 
-    // Log endpoint configuration in development
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `📡 Goal Planning API - Session: ${sessionId}, User: ${userId}`
-      );
-    }
+    // Log endpoint configuration (always log in production for debugging)
+    console.log(
+      `📡 Goal Planning API - Session: ${sessionId}, User: ${userId}`
+    );
+    console.log(`📡 Goal:`, requestBody.goal);
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
@@ -123,6 +122,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         },
       };
 
+      console.log(
+        `🚀 Starting Agent Engine goal planning stream for session: ${sessionId}`
+      );
+      console.log(
+        `📤 Stream payload:`,
+        JSON.stringify(streamQueryPayload, null, 2)
+      );
+
       const streamResponse = await fetch(streamEndpoint, {
         method: "POST",
         headers: {
@@ -132,10 +139,18 @@ export async function POST(request: NextRequest): Promise<Response> {
         body: JSON.stringify(streamQueryPayload),
       });
 
+      console.log(
+        `📡 Goal planning stream response status: ${streamResponse.status} ${streamResponse.statusText}`
+      );
+      console.log(
+        `📡 Response headers:`,
+        Object.fromEntries(streamResponse.headers.entries())
+      );
+
       if (!streamResponse.ok) {
         const errorText = await streamResponse.text();
         console.error(
-          "Agent Engine stream error:",
+          "❌ Agent Engine goal planning stream error:",
           streamResponse.status,
           streamResponse.statusText,
           errorText
@@ -150,29 +165,59 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
 
       // Forward the real streaming response
+      console.log(`🌊 Setting up goal planning stream forwarding...`);
+
       const stream = new ReadableStream({
         start(controller) {
           if (!streamResponse.body) {
+            console.log(
+              `❌ No response body from Agent Engine for goal planning`
+            );
             controller.close();
             return;
           }
 
+          console.log(
+            `✅ Agent Engine goal planning response body exists, starting stream reader...`
+          );
           const reader = streamResponse.body.getReader();
           const decoder = new TextDecoder();
+          let chunkCount = 0;
 
           async function pump() {
             try {
               while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
 
+                if (done) {
+                  console.log(
+                    `🏁 Goal planning stream complete after ${chunkCount} chunks`
+                  );
+                  break;
+                }
+
+                chunkCount++;
                 const chunk = decoder.decode(value, { stream: true });
+                console.log(
+                  `📦 Goal planning chunk ${chunkCount} received (${chunk.length} bytes):`,
+                  chunk.substring(0, 200) + (chunk.length > 200 ? "..." : "")
+                );
+
                 // Forward the SSE chunk as-is from Agent Engine
                 controller.enqueue(new TextEncoder().encode(chunk));
+                console.log(
+                  `✅ Goal planning chunk ${chunkCount} forwarded to client`
+                );
               }
             } catch (error) {
-              console.error("Error reading Agent Engine stream:", error);
+              console.error(
+                "❌ Error reading Agent Engine goal planning stream:",
+                error
+              );
             } finally {
+              console.log(
+                `🔚 Closing goal planning stream controller after ${chunkCount} chunks`
+              );
               controller.close();
             }
           }
