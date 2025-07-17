@@ -241,6 +241,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           const reader = streamResponse.body.getReader();
           const decoder = new TextDecoder();
           let chunkCount = 0;
+          let buffer = ""; // Buffer to accumulate incomplete JSON
 
           async function pump() {
             try {
@@ -249,6 +250,30 @@ export async function POST(request: NextRequest): Promise<Response> {
 
                 if (done) {
                   console.log(`🏁 Stream complete after ${chunkCount} chunks`);
+                  // Process any remaining data in buffer
+                  if (buffer.trim()) {
+                    console.log(
+                      `🔄 Processing final buffer content: ${buffer.substring(
+                        0,
+                        100
+                      )}...`
+                    );
+                    try {
+                      const parsedJson = JSON.parse(buffer.trim());
+                      const sseFormattedChunk = `data: ${JSON.stringify(
+                        parsedJson
+                      )}\n\n`;
+                      controller.enqueue(
+                        new TextEncoder().encode(sseFormattedChunk)
+                      );
+                      console.log(`✅ Final buffer forwarded as SSE to client`);
+                    } catch (parseError) {
+                      console.error(
+                        "❌ Failed to parse final buffer as JSON:",
+                        parseError
+                      );
+                    }
+                  }
                   break;
                 }
 
@@ -260,22 +285,83 @@ export async function POST(request: NextRequest): Promise<Response> {
                     (rawChunk.length > 200 ? "..." : "")
                 );
 
-                // Transform raw JSON to proper SSE format
-                // Agent Engine sends raw JSON, we need to format it as SSE
-                if (rawChunk.trim()) {
-                  const sseFormattedChunk = `data: ${rawChunk.trim()}\n\n`;
-                  console.log(
-                    `🔄 Transformed to SSE format (${sseFormattedChunk.length} bytes):`,
-                    sseFormattedChunk.substring(0, 100) +
-                      (sseFormattedChunk.length > 100 ? "..." : "")
-                  );
+                // Add chunk to buffer
+                buffer += rawChunk;
 
-                  controller.enqueue(
-                    new TextEncoder().encode(sseFormattedChunk)
-                  );
-                  console.log(
-                    `✅ Chunk ${chunkCount} forwarded as SSE to client`
-                  );
+                // Try to extract complete JSON objects from buffer
+                let jsonStart = 0;
+                let braceCount = 0;
+                let inString = false;
+                let escaped = false;
+
+                for (let i = 0; i < buffer.length; i++) {
+                  const char = buffer[i];
+
+                  if (escaped) {
+                    escaped = false;
+                    continue;
+                  }
+
+                  if (char === "\\") {
+                    escaped = true;
+                    continue;
+                  }
+
+                  if (char === '"') {
+                    inString = !inString;
+                    continue;
+                  }
+
+                  if (!inString) {
+                    if (char === "{") {
+                      if (braceCount === 0) {
+                        jsonStart = i;
+                      }
+                      braceCount++;
+                    } else if (char === "}") {
+                      braceCount--;
+                      if (braceCount === 0) {
+                        // Found complete JSON object
+                        const jsonStr = buffer.substring(jsonStart, i + 1);
+                        console.log(
+                          `🎯 Found complete JSON (${jsonStr.length} bytes):`,
+                          jsonStr.substring(0, 100) + "..."
+                        );
+
+                        try {
+                          const parsedJson = JSON.parse(jsonStr);
+                          const sseFormattedChunk = `data: ${JSON.stringify(
+                            parsedJson
+                          )}\n\n`;
+                          console.log(
+                            `🔄 Transformed complete JSON to SSE format`
+                          );
+
+                          controller.enqueue(
+                            new TextEncoder().encode(sseFormattedChunk)
+                          );
+                          console.log(
+                            `✅ Complete JSON forwarded as SSE to client`
+                          );
+
+                          // Remove processed JSON from buffer
+                          buffer = buffer.substring(i + 1);
+                          i = -1; // Reset loop
+                          jsonStart = 0;
+                        } catch (parseError) {
+                          console.error(
+                            "❌ Failed to parse extracted JSON:",
+                            parseError
+                          );
+                          console.error(
+                            "❌ Problematic JSON:",
+                            jsonStr.substring(0, 200)
+                          );
+                          // Continue trying to find next complete JSON
+                        }
+                      }
+                    }
+                  }
                 }
               }
             } catch (error) {
