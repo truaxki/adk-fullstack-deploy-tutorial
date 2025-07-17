@@ -253,15 +253,30 @@ export async function POST(request: NextRequest): Promise<Response> {
                 }
 
                 chunkCount++;
-                const chunk = decoder.decode(value, { stream: true });
+                const rawChunk = decoder.decode(value, { stream: true });
                 console.log(
-                  `📦 Chunk ${chunkCount} received (${chunk.length} bytes):`,
-                  chunk.substring(0, 200) + (chunk.length > 200 ? "..." : "")
+                  `📦 Chunk ${chunkCount} received (${rawChunk.length} bytes):`,
+                  rawChunk.substring(0, 200) +
+                    (rawChunk.length > 200 ? "..." : "")
                 );
 
-                // Forward the SSE chunk as-is
-                controller.enqueue(new TextEncoder().encode(chunk));
-                console.log(`✅ Chunk ${chunkCount} forwarded to client`);
+                // Transform raw JSON to proper SSE format
+                // Agent Engine sends raw JSON, we need to format it as SSE
+                if (rawChunk.trim()) {
+                  const sseFormattedChunk = `data: ${rawChunk.trim()}\n\n`;
+                  console.log(
+                    `🔄 Transformed to SSE format (${sseFormattedChunk.length} bytes):`,
+                    sseFormattedChunk.substring(0, 100) +
+                      (sseFormattedChunk.length > 100 ? "..." : "")
+                  );
+
+                  controller.enqueue(
+                    new TextEncoder().encode(sseFormattedChunk)
+                  );
+                  console.log(
+                    `✅ Chunk ${chunkCount} forwarded as SSE to client`
+                  );
+                }
               }
             } catch (error) {
               console.error("❌ Error reading Agent Engine stream:", error);
