@@ -1,4 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { endpointConfig, getAuthHeaders } from "@/lib/config";
+
+// Type definitions for different payload formats
+type AgentEnginePayload = {
+  class_method: "stream_query";
+  input: {
+    user_id: string;
+    session_id: string;
+    message: string;
+  };
+};
+
+type LocalPayload = {
+  message: string;
+  userId: string;
+  sessionId: string;
+};
+
+type BackendPayload = AgentEnginePayload | LocalPayload;
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
@@ -32,40 +51,66 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    // Forward request to Agent Engine
-    const agentEngineUrl = `${process.env.AGENT_ENGINE_URL}/chat`;
-    console.log(`🔗 Forwarding to Agent Engine: ${agentEngineUrl}`);
+    // Use the existing configuration system to determine the backend URL
+    console.log(`🔧 Using deployment type: ${endpointConfig.deploymentType}`);
+    console.log(`🔧 Backend URL: ${endpointConfig.backendUrl}`);
+    console.log(`🔧 Agent Engine URL: ${endpointConfig.agentEngineUrl}`);
 
-    const agentEnginePayload = {
-      message,
-      user_id: userId,
-      session_id: sessionId,
-    };
+    let agentEngineUrl: string;
+    let agentEnginePayload: BackendPayload;
+    let headers: Record<string, string>;
 
-    console.log(`📤 Agent Engine payload:`, agentEnginePayload);
+    if (
+      endpointConfig.deploymentType === "agent_engine" &&
+      endpointConfig.agentEngineUrl
+    ) {
+      // Agent Engine deployment - use stream_query format
+      agentEngineUrl = `${endpointConfig.agentEngineUrl}:streamQuery?alt=sse`;
+      agentEnginePayload = {
+        class_method: "stream_query",
+        input: {
+          user_id: userId,
+          session_id: sessionId,
+          message: message,
+        },
+      };
+      headers = await getAuthHeaders();
+    } else {
+      // Local or other deployment - use simple format
+      agentEngineUrl = `${endpointConfig.backendUrl}/run_sse`;
+      agentEnginePayload = {
+        message,
+        userId,
+        sessionId,
+      };
+      headers = {
+        "Content-Type": "application/json",
+      };
+    }
+
+    console.log(`🔗 Forwarding to: ${agentEngineUrl}`);
+    console.log(`📤 Payload:`, agentEnginePayload);
 
     const response = await fetch(agentEngineUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(agentEnginePayload),
     });
 
     if (!response.ok) {
       console.error(
-        `❌ Agent Engine error: ${response.status} ${response.statusText}`
+        `❌ Backend error: ${response.status} ${response.statusText}`
       );
+      const errorText = await response.text();
+      console.error(`❌ Error details:`, errorText);
       return NextResponse.json(
-        {
-          error: `Agent Engine error: ${response.status} ${response.statusText}`,
-        },
+        { error: `Backend error: ${response.status} ${response.statusText}` },
         { status: response.status }
       );
     }
 
     console.log(
-      `✅ Agent Engine response received, content-type: ${response.headers.get(
+      `✅ Backend response received, content-type: ${response.headers.get(
         "content-type"
       )}`
     );
@@ -86,7 +131,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               const { done, value } = await reader.read();
 
               if (done) {
-                console.log(`🏁 Agent Engine stream complete`);
+                console.log(`🏁 Stream complete`);
                 controller.close();
                 break;
               }
