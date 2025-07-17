@@ -104,14 +104,17 @@ export async function POST(
         `✅ Agent Engine session created successfully: ${actualSessionId}`
       );
 
-      return NextResponse.json({
+      const responseData = {
         sessionId: actualSessionId,
         userId: userId,
         status: "created",
         deploymentType: endpointConfig.deploymentType,
         timestamp: new Date().toISOString(),
         originalRequestedSessionId: sessionId,
-      });
+      };
+
+      console.log(`✅ Returning session creation response:`, responseData);
+      return NextResponse.json(responseData);
     } else {
       // For regular backend deployment (local or Cloud Run)
       const authHeaders = await getAuthHeaders();

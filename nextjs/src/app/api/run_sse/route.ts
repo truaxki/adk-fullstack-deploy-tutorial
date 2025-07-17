@@ -48,6 +48,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     console.log(`📡 Request body:`, JSON.stringify(requestBody, null, 2));
     console.log(`📡 Should use Agent Engine: ${shouldUseAgentEngine()}`);
     console.log(`📡 user id: ${requestBody.userId}`);
+    console.log(`📡 session id: ${requestBody.sessionId}`);
 
     // Handle Agent Engine vs regular backend deployment
     if (shouldUseAgentEngine()) {
@@ -111,6 +112,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 
       // Check if we already have a session ID from the request
       let sessionId = requestBody.sessionId;
+      console.log(
+        `🔍 Agent Engine run_sse: userId=${userId}, incoming sessionId=${sessionId}`
+      );
 
       // If no session ID provided, create a new session
       if (!sessionId) {

@@ -116,10 +116,20 @@ export default function ChatInterface() {
   // Handle session switching
   const handleSessionSwitch = useCallback(
     (newSessionId: string) => {
-      if (!userId || newSessionId === sessionId) return;
+      console.log(
+        `🔄 handleSessionSwitch called: current=${sessionId}, new=${newSessionId}, userId=${userId}`
+      );
+
+      if (!userId || newSessionId === sessionId) {
+        console.log(`⏭️ Skipping session switch: no userId or same session`);
+        return;
+      }
 
       // Save current session messages before switching
       if (sessionId && messages.length > 0) {
+        console.log(
+          `💾 Saving ${messages.length} messages for current session: ${sessionId}`
+        );
         saveMessagesToStorage(userId, sessionId, messages);
 
         // Update session in localStorage with latest activity
@@ -134,19 +144,25 @@ export default function ChatInterface() {
             messageCount: messages.length,
           };
           saveSessionsToStorage(userId, storedSessions);
+          console.log(`✅ Updated session metadata for: ${sessionId}`);
         }
       }
 
       // Switch to new session
+      console.log(`🎯 Setting sessionId state to: ${newSessionId}`);
       setSessionId(newSessionId);
 
       // Load messages for new session
       const sessionMessages = loadMessagesFromStorage(userId, newSessionId);
+      console.log(
+        `📨 Loaded ${sessionMessages.length} messages for session: ${newSessionId}`
+      );
       setMessages(sessionMessages);
 
       // Clear events and website count for new session
       setMessageEvents(new Map());
       setWebsiteCount(0);
+      console.log(`🧹 Cleared events and website count for new session`);
     },
     [
       userId,
@@ -296,11 +312,12 @@ export default function ChatInterface() {
           // For Agent Engine, use the actual session ID returned by the backend
           actualSessionId = sessionData.sessionId || requestedSessionId;
           console.log(
-            `Session created: requested=${requestedSessionId}, actual=${actualSessionId}`
+            `✅ Session created: requested=${requestedSessionId}, actual=${actualSessionId}`
           );
+          console.log(`📝 Session data:`, sessionData);
         } else {
           console.warn(
-            "Session creation API failed, using requested ID:",
+            "⚠️ Session creation API failed, using requested ID:",
             sessionResponse.status
           );
           // Fall back to using the requested ID
@@ -315,6 +332,10 @@ export default function ChatInterface() {
         ? generateSessionTitle(initialMessage)
         : `Session ${actualSessionId.slice(-8)}`;
 
+      console.log(
+        `📋 Creating session object: ID=${actualSessionId}, Title=${sessionTitle}`
+      );
+
       // Create new session object with the actual session ID
       const newSession: StoredSession = {
         id: actualSessionId,
@@ -328,25 +349,33 @@ export default function ChatInterface() {
       const storedSessions = loadSessionsFromStorage(sessionUserId);
       const updatedSessions = [newSession, ...storedSessions];
       saveSessionsToStorage(sessionUserId, updatedSessions);
+      console.log(`💾 Saved session to localStorage:`, newSession);
 
       // Switch to the new session using the actual session ID
+      console.log(`🔄 Switching to session: ${actualSessionId}`);
       handleSessionSwitch(actualSessionId);
 
       // If there's an initial message, send it
       if (initialMessage) {
+        console.log(
+          `📨 Sending initial message to session: ${actualSessionId}`
+        );
         // Use a direct API call to avoid circular dependency
         setIsLoading(true);
         try {
+          const initialMessagePayload = {
+            message: initialMessage,
+            userId: sessionUserId,
+            sessionId: actualSessionId,
+          };
+          console.log(`📤 Initial message payload:`, initialMessagePayload);
+
           const response = await fetch("/api/run_sse", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              message: initialMessage,
-              userId: sessionUserId,
-              sessionId: actualSessionId,
-            }),
+            body: JSON.stringify(initialMessagePayload),
           });
 
           if (!response.ok) {
@@ -733,9 +762,17 @@ export default function ChatInterface() {
       try {
         // Use provided session ID or current state
         let currentSessionId = requestSessionId || sessionId;
+        console.log(
+          `🎯 handleSubmit: requestSessionId=${requestSessionId}, sessionId=${sessionId}, currentSessionId=${currentSessionId}`
+        );
+
         if (!currentSessionId) {
+          console.log(`⚠️ No session ID available, generating new one`);
           currentSessionId = uuidv4();
           setSessionId(currentSessionId);
+          console.log(`🆕 Generated new session ID: ${currentSessionId}`);
+        } else {
+          console.log(`✅ Using existing session ID: ${currentSessionId}`);
         }
 
         // Add user message to chat
@@ -763,17 +800,20 @@ export default function ChatInterface() {
         setMessages((prev) => [...prev, aiMessage]);
 
         // Send to Agent Engine API with enhanced payload
+        const apiPayload = {
+          message: query,
+          userId: currentUserId,
+          sessionId: currentSessionId,
+        };
+        console.log(`📤 Sending API request with payload:`, apiPayload);
+
         const response = await retryWithBackoff(() =>
           fetch("/api/run_sse", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              message: query,
-              userId: currentUserId,
-              sessionId: currentSessionId,
-            }),
+            body: JSON.stringify(apiPayload),
           })
         );
 
