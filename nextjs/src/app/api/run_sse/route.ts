@@ -242,6 +242,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           const decoder = new TextDecoder();
           let chunkCount = 0;
           let buffer = ""; // Buffer to accumulate incomplete JSON
+          const startTime = Date.now(); // Track timing
 
           async function pump() {
             try {
@@ -284,6 +285,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                   rawChunk.substring(0, 200) +
                     (rawChunk.length > 200 ? "..." : "")
                 );
+                console.log(`🔢 Current buffer size: ${buffer.length} bytes`);
 
                 // Add chunk to buffer
                 buffer += rawChunk;
@@ -324,8 +326,11 @@ export async function POST(request: NextRequest): Promise<Response> {
                         // Found complete JSON object
                         const jsonStr = buffer.substring(jsonStart, i + 1);
                         console.log(
-                          `🎯 Found complete JSON (${jsonStr.length} bytes):`,
+                          `🎯 Found complete JSON (${jsonStr.length} bytes) after ${chunkCount} chunks:`,
                           jsonStr.substring(0, 100) + "..."
+                        );
+                        console.log(
+                          `⏰ Time since start: ${Date.now() - startTime}ms`
                         );
 
                         try {
