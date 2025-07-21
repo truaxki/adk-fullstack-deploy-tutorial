@@ -2,7 +2,7 @@
  * Agent Engine Handler for Run SSE API Route
  *
  * Handles requests for Agent Engine deployment configuration.
- * This handler formats requests for Agent Engine endpoints and processes complete responses.
+ * This handler formats requests for Agent Engine endpoints and streams real-time responses.
  */
 
 import { getEndpointForPath, getAuthHeaders } from "@/lib/config";
@@ -16,13 +16,12 @@ import {
   createInternalServerError,
   createBackendConnectionError,
 } from "./error-utils";
-import { NextResponse } from "next/server";
 
 /**
- * Handle Agent Engine request (non-streaming)
+ * Handle Agent Engine streaming request with real-time SSE forwarding
  *
  * @param requestData - Processed request data
- * @returns JSON Response with complete data from Agent Engine
+ * @returns Streaming SSE Response forwarding Agent Engine data
  */
 export async function handleAgentEngineStreamRequest(
   requestData: ProcessedStreamRequest
@@ -31,8 +30,8 @@ export async function handleAgentEngineStreamRequest(
     // Format payload for Agent Engine
     const agentEnginePayload = formatAgentEnginePayload(requestData);
 
-    // Build Agent Engine URL with the non-streaming :query endpoint
-    const agentEngineUrl = getEndpointForPath("", "query");
+    // Build Agent Engine URL with the streaming :streamQuery?alt=sse endpoint
+    const agentEngineUrl = getEndpointForPath("", "streamQuery");
 
     // Log operation start
     logStreamStart(agentEngineUrl, agentEnginePayload, "agent_engine");
@@ -40,7 +39,7 @@ export async function handleAgentEngineStreamRequest(
     // Get authentication headers
     const authHeaders = await getAuthHeaders();
 
-    // Forward request to Agent Engine and wait for the complete response
+    // Forward request to Agent Engine streaming endpoint
     const response = await fetch(agentEngineUrl, {
       method: "POST",
       headers: {
@@ -64,7 +63,7 @@ export async function handleAgentEngineStreamRequest(
       try {
         const errorText = await response.text();
         console.error(`❌ Agent Engine error details:`, errorText);
-        if (errorText) {
+        if (errorDetails && errorText) {
           errorDetails += `. ${errorText}`;
         }
       } catch {
@@ -78,11 +77,61 @@ export async function handleAgentEngineStreamRequest(
       );
     }
 
-    // Parse the complete JSON response
-    const responseData = await response.json();
+    // Create SSE streaming response to forward Agent Engine stream
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
 
-    // Return the complete data as a single JSON response
-    return NextResponse.json(responseData);
+        if (!reader) {
+          controller.error(new Error("No readable stream from Agent Engine"));
+          return;
+        }
+
+        console.log("🔄 [AGENT ENGINE] Starting SSE stream forwarding");
+
+        try {
+          // Read and forward chunks from Agent Engine
+          let done = false;
+          while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            done = readerDone;
+
+            if (value) {
+              const chunk = decoder.decode(value, { stream: true });
+              console.log(
+                `📡 [AGENT ENGINE] Forwarding chunk: ${chunk.length} bytes`
+              );
+
+              // Forward the chunk to the frontend as-is
+              // Agent Engine should already provide properly formatted SSE
+              controller.enqueue(new TextEncoder().encode(chunk));
+            }
+          }
+
+          console.log("✅ [AGENT ENGINE] Stream forwarding completed");
+          controller.close();
+        } catch (error) {
+          console.error("❌ [AGENT ENGINE] Stream forwarding error:", error);
+          controller.error(error);
+        } finally {
+          reader.releaseLock();
+        }
+      },
+    });
+
+    // Return streaming SSE response with proper headers
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
   } catch (error) {
     console.error("❌ Agent Engine handler error:", error);
 
@@ -98,7 +147,7 @@ export async function handleAgentEngineStreamRequest(
     return createInternalServerError(
       "agent_engine",
       error,
-      "Failed to process Agent Engine request"
+      "Failed to process Agent Engine streaming request"
     );
   }
 }
@@ -113,11 +162,11 @@ export function validateAgentEngineConfig(): {
   error?: string;
 } {
   try {
-    const endpoint = getEndpointForPath("", "query");
+    const endpoint = getEndpointForPath("", "streamQuery");
     if (!endpoint) {
       return {
         isValid: false,
-        error: "Agent Engine endpoint not configured",
+        error: "Agent Engine streaming endpoint not configured",
       };
     }
 
