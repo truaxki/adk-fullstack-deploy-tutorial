@@ -36,17 +36,6 @@ export function UserIdInput({
       return { valid: false, message: "User ID is required" };
     }
 
-    if (userId.length < 3) {
-      return { valid: false, message: "User ID must be at least 3 characters" };
-    }
-
-    if (userId.length > 50) {
-      return {
-        valid: false,
-        message: "User ID must be less than 50 characters",
-      };
-    }
-
     // Allow alphanumeric characters, hyphens, and underscores
     if (!/^[a-zA-Z0-9_-]+$/.test(userId)) {
       return {

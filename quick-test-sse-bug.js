@@ -55,7 +55,7 @@ async function testSSEBug() {
       body: JSON.stringify({
         class_method: "stream_query",
         input: {
-          user_id: "test-user",
+          user_id: "google-test-user",
           session_id: "test-session-" + Date.now(),
           message: "Just say 'hello world' - keep it simple",
         },

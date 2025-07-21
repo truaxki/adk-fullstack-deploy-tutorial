@@ -82,7 +82,7 @@ export function SessionSelector({
             id: currentSessionId,
             userId: currentUserId,
             lastActivity: new Date(),
-            title: `Session ${currentSessionId.slice(-8)}`,
+            title: `Session ${currentSessionId}`,
             messageCount: 0,
           };
           setSessions([newSession, ...storedSessions]);
