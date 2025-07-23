@@ -95,14 +95,23 @@ class JSONFragmentProcessor {
    * Find complete part objects in the buffer and stream them immediately
    */
   private findAndStreamCompleteParts(): void {
-    // Look for complete part objects using brace counting
+    // Look for the parts array start
+    const partsMatch = this.buffer.match(/"parts"\s*:\s*\[/);
+    if (!partsMatch) {
+      return; // No parts array found yet
+    }
+
+    const partsStartIndex = partsMatch.index! + partsMatch[0].length;
+    const partsContent = this.buffer.substring(partsStartIndex);
+
+    // Now look for complete part objects within the parts array
     let braceCount = 0;
     let inString = false;
     let escapeNext = false;
     let partStartPos = -1;
 
-    for (let i = 0; i < this.buffer.length; i++) {
-      const char = this.buffer[i];
+    for (let i = 0; i < partsContent.length; i++) {
+      const char = partsContent[i];
 
       if (escapeNext) {
         escapeNext = false;
@@ -123,43 +132,35 @@ class JSONFragmentProcessor {
 
       if (char === "{") {
         if (braceCount === 0) {
-          // Check if this looks like the start of a part object
-          const beforeBrace = this.buffer.substring(Math.max(0, i - 20), i);
-          if (
-            beforeBrace.includes('"parts"') ||
-            beforeBrace.includes("[") ||
-            partStartPos === -1
-          ) {
-            partStartPos = i;
-          }
+          partStartPos = i;
         }
         braceCount++;
       } else if (char === "}") {
         braceCount--;
         if (braceCount === 0 && partStartPos !== -1) {
-          // We have a complete object, check if it's a part
-          const objectJson = this.buffer.substring(partStartPos, i + 1);
+          // We have a complete part object
+          const partJson = partsContent.substring(partStartPos, i + 1);
 
           try {
-            const obj = JSON.parse(objectJson);
+            const part = JSON.parse(partJson);
 
-            // Check if this looks like a part object (has text property)
-            if (obj.text && typeof obj.text === "string") {
-              const partHash = this.hashPart(obj);
+            // Check if this is a valid part object
+            if (part.text && typeof part.text === "string") {
+              const partHash = this.hashPart(part);
 
               if (!this.sentParts.has(partHash)) {
                 console.log(
-                  `✅ [JSON PROCESSOR] Found new complete part: ${obj.text.substring(
+                  `✅ [JSON PROCESSOR] Found new complete part: ${part.text.substring(
                     0,
                     100
                   )}...`
                 );
-                this.streamPart(obj);
+                this.streamPart(part);
                 this.sentParts.add(partHash);
               }
             }
           } catch {
-            // Not valid JSON or not a part object, continue
+            // Not a valid JSON object, continue
           }
 
           partStartPos = -1;
