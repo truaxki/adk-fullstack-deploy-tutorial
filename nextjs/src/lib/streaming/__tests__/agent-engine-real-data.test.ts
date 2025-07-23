@@ -27,7 +27,10 @@ describe("Agent Engine Real Data Processing", () => {
         role: string;
       };
       author: string;
-      usage_metadata?: any;
+      usage_metadata?: {
+        candidates_token_count: number;
+        total_token_count: number;
+      };
       invocation_id?: string;
     }
 
@@ -84,7 +87,13 @@ describe("Agent Engine Real Data Processing", () => {
 
   it("should show correct frontend processing approach", () => {
     const lines = REAL_AGENT_ENGINE_RESPONSE.trim().split("\n");
-    const processedParts: any[] = [];
+    interface ProcessedPart {
+      text: string;
+      thought: boolean;
+      author: string;
+    }
+
+    const processedParts: ProcessedPart[] = [];
 
     // Correct approach: Parse JSON directly, don't go through SSE pipeline
     lines.forEach((line) => {
