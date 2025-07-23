@@ -164,10 +164,11 @@ export class StreamingConnectionManager {
   }
 
   /**
-   * Handle SSE stream processing with real-time event processing
-   * Based on the working example's approach
+   * Handle both SSE streaming and complete JSON responses
+   * - SSE streaming: Local backend with real-time event processing
+   * - Complete JSON: Agent Engine with single complete response
    *
-   * @param response - Fetch response with SSE stream
+   * @param response - Fetch response (SSE stream or JSON)
    * @param aiMessageId - AI message ID for updates
    * @param callbacks - Stream processing callbacks
    * @param accumulatedTextRef - Reference to accumulated text
@@ -182,6 +183,23 @@ export class StreamingConnectionManager {
     currentAgentRef: React.MutableRefObject<string>,
     setCurrentAgent: (agent: string) => void
   ): Promise<void> {
+    const contentType = response.headers.get("content-type") || "";
+
+    // Check if this is a complete JSON response (Agent Engine) or SSE stream (local backend)
+    if (contentType.includes("application/json")) {
+      // Handle complete JSON response from Agent Engine
+      await this.handleCompleteJSONResponse(
+        response,
+        aiMessageId,
+        callbacks,
+        accumulatedTextRef,
+        currentAgentRef,
+        setCurrentAgent
+      );
+      return;
+    }
+
+    // Handle SSE streaming response from local backend
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error("No readable stream available");
@@ -291,6 +309,73 @@ export class StreamingConnectionManager {
       await pump();
     } catch (error) {
       createDebugLog("SSE ERROR", "Error reading stream", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle complete JSON response from Agent Engine
+   * Agent Engine returns complete responses instead of streaming
+   *
+   * @param response - Fetch response with JSON data
+   * @param aiMessageId - AI message ID for updates
+   * @param callbacks - Stream processing callbacks
+   * @param accumulatedTextRef - Reference to accumulated text
+   * @param currentAgentRef - Reference to current agent state
+   * @param setCurrentAgent - Agent state setter
+   */
+  private async handleCompleteJSONResponse(
+    response: Response,
+    aiMessageId: string,
+    callbacks: StreamProcessingCallbacks,
+    accumulatedTextRef: React.MutableRefObject<string>,
+    currentAgentRef: React.MutableRefObject<string>,
+    setCurrentAgent: (agent: string) => void
+  ): Promise<void> {
+    try {
+      const jsonData = await response.json();
+      createDebugLog(
+        "JSON RESPONSE",
+        "Received complete JSON response from Agent Engine",
+        jsonData
+      );
+
+      // Check if this is the Agent Engine's complete response format
+      if (jsonData.complete && jsonData.content) {
+        // Agent Engine complete response format
+        const content = jsonData.content;
+        const agent = jsonData.agent || "agent_engine";
+
+        // Update agent state
+        if (agent !== currentAgentRef.current) {
+          currentAgentRef.current = agent;
+          setCurrentAgent(agent);
+        }
+
+        // Update accumulated text
+        accumulatedTextRef.current = content;
+
+        // Create complete message update
+        const completeMessage: Message = {
+          type: "ai",
+          content: content,
+          id: aiMessageId,
+          timestamp: new Date(),
+        };
+
+        // Send complete message update to UI
+        callbacks.onMessageUpdate(completeMessage);
+
+        createDebugLog(
+          "JSON COMPLETE",
+          `Agent Engine message complete: ${content.length} characters`
+        );
+      } else {
+        // If it's not the expected format, treat it as an error
+        throw new Error("Unexpected response format from Agent Engine");
+      }
+    } catch (error) {
+      createDebugLog("JSON ERROR", "Error processing JSON response", error);
       throw error;
     }
   }
