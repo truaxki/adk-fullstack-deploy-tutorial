@@ -463,9 +463,10 @@ export class StreamingConnectionManager {
                   }): ${part.text.substring(0, 100)}...`
                 );
 
-                // Process through SSE pipeline
-                processSseEventData(
-                  line, // Send the original complete JSON line
+                // Process Agent Engine JSON directly (no SSE pipeline needed)
+                this.processAgentEngineJsonPart(
+                  jsonData,
+                  part,
                   aiMessageId,
                   callbacks,
                   accumulatedTextRef,
@@ -487,6 +488,49 @@ export class StreamingConnectionManager {
         );
       }
     }
+  }
+
+  /**
+   * Process Agent Engine JSON part directly (no SSE conversion needed)
+   */
+  private processAgentEngineJsonPart(
+    jsonData: {
+      author?: string;
+      content?: { parts: Array<{ text: string; thought?: boolean }> };
+    },
+    part: { text: string; thought?: boolean },
+    aiMessageId: string,
+    callbacks: StreamProcessingCallbacks,
+    accumulatedTextRef: React.MutableRefObject<string>,
+    currentAgentRef: React.MutableRefObject<string>,
+    setCurrentAgent: (agent: string) => void
+  ): void {
+    // Update current agent
+    if (jsonData.author && jsonData.author !== currentAgentRef.current) {
+      currentAgentRef.current = jsonData.author;
+      setCurrentAgent(jsonData.author);
+    }
+
+    // Add text to accumulated text
+    accumulatedTextRef.current += part.text;
+
+    // Create proper Message update for callback
+    const messageUpdate: Message = {
+      type: "ai",
+      content: accumulatedTextRef.current, // Use accumulated content
+      id: aiMessageId,
+      timestamp: new Date(),
+    };
+
+    // Call the message update callback
+    callbacks.onMessageUpdate(messageUpdate);
+
+    createDebugLog(
+      "AGENT ENGINE PROCESSED",
+      `Processed part directly (thought: ${part.thought}, author: ${
+        jsonData.author
+      }): ${part.text.substring(0, 100)}...`
+    );
   }
 
   /**
