@@ -180,8 +180,8 @@ class JSONFragmentProcessor {
                   part.text.substring(0, 200) +
                     (part.text.length > 200 ? "..." : "")
                 );
-                // Send complete part directly to frontend
-                this.emitCompletePart(part);
+                // Send complete part directly to frontend with async yielding
+                this.emitCompletePartAsync(part);
                 this.sentParts.add(partHash);
 
                 // Update the last processed index to avoid reprocessing this part
@@ -246,6 +246,34 @@ class JSONFragmentProcessor {
     this.controller.enqueue(new TextEncoder().encode(sseMessage));
 
     console.log(`✅ [JSON PROCESSOR] Successfully emitted complete part`);
+  }
+
+  /**
+   * Emit a complete part asynchronously with 50ms delay for proper streaming separation
+   */
+  private emitCompletePartAsync(part: AgentEngineContentPart): void {
+    // Use 50ms timeout to ensure parts are separated in time on the frontend
+    setTimeout(() => {
+      console.log(
+        `📤 [JSON PROCESSOR] Emitting complete part with 50ms delay (thought: ${part.thought}):`,
+        part.text?.substring(0, 200) +
+          (part.text && part.text.length > 200 ? "..." : "")
+      );
+
+      const sseData = {
+        content: {
+          parts: [part],
+        },
+        author: this.currentAgent || "goal_planning_agent",
+      };
+
+      const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
+      this.controller.enqueue(new TextEncoder().encode(sseMessage));
+
+      console.log(
+        `✅ [JSON PROCESSOR] Successfully emitted complete part with delay`
+      );
+    }, 50); // 50ms delay
   }
 
   /**
