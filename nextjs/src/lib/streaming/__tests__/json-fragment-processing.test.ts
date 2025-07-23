@@ -4,11 +4,19 @@
  */
 
 describe("JSON Fragment Processing", () => {
+  // Define interface for parsed parts
+  interface ParsedPart {
+    text: string;
+    thought?: boolean;
+  }
+
   // Test JSON fragment parsing logic
   describe("JSON Fragment Parsing", () => {
-    const simulateJsonFragmentProcessing = (fragments: string[]) => {
+    const simulateJsonFragmentProcessing = (
+      fragments: string[]
+    ): ParsedPart[] => {
       let buffer = "";
-      const foundParts: any[] = [];
+      const foundParts: ParsedPart[] = [];
       const sentParts = new Set<string>();
       let lastProcessedIndex = 0;
 

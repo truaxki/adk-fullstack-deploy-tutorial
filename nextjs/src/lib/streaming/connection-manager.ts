@@ -375,11 +375,10 @@ export class StreamingConnectionManager {
     const decoder = new TextDecoder();
     let buffer = "";
     const sentParts: Set<string> = new Set();
-    let lastProcessedIndex = 0;
 
-    createDebugLog("AGENT ENGINE", "Starting JSON fragment processing");
+    createDebugLog("AGENT ENGINE", "Starting JSON line processing");
 
-    // Use recursive pump function to process JSON fragments
+    // Use recursive pump function to process complete JSON lines
     const pump = async (): Promise<void> => {
       const { done, value } = await reader.read();
 
@@ -387,14 +386,13 @@ export class StreamingConnectionManager {
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
         createDebugLog(
-          "JSON FRAGMENT",
+          "AGENT ENGINE",
           `Received ${chunk.length} bytes, buffer now ${buffer.length} bytes`
         );
 
-        // Process any complete parts found in the buffer
-        lastProcessedIndex = this.processJsonFragmentBuffer(
+        // Process complete JSON lines (backend already processed fragments)
+        this.processCompleteJsonLines(
           buffer,
-          lastProcessedIndex,
           sentParts,
           aiMessageId,
           callbacks,
@@ -402,10 +400,14 @@ export class StreamingConnectionManager {
           currentAgentRef,
           setCurrentAgent
         );
+
+        // Clear processed lines from buffer
+        const lines = buffer.split("\n");
+        buffer = lines[lines.length - 1]; // Keep incomplete line
       }
 
       if (done) {
-        createDebugLog("AGENT ENGINE", "JSON fragment stream completed");
+        createDebugLog("AGENT ENGINE", "JSON stream completed");
         return;
       }
 
@@ -425,96 +427,45 @@ export class StreamingConnectionManager {
   }
 
   /**
-   * Process JSON fragment buffer to find and emit complete parts
-   * Returns the updated lastProcessedIndex
+   * Process complete JSON lines sent from backend (no fragment processing needed)
    */
-  private processJsonFragmentBuffer(
+  private processCompleteJsonLines(
     buffer: string,
-    lastProcessedIndex: number,
     sentParts: Set<string>,
     aiMessageId: string,
     callbacks: StreamProcessingCallbacks,
     accumulatedTextRef: React.MutableRefObject<string>,
     currentAgentRef: React.MutableRefObject<string>,
     setCurrentAgent: (agent: string) => void
-  ): number {
-    // Look for the parts array start
-    const partsMatch = buffer.match(/"parts"\s*:\s*\[/);
-    if (!partsMatch) {
-      return lastProcessedIndex; // No parts array found yet
-    }
+  ): void {
+    // Split buffer into lines and process complete lines
+    const lines = buffer.split("\n");
 
-    const partsStartIndex = partsMatch.index! + partsMatch[0].length;
-    const partsContent = buffer.substring(partsStartIndex);
+    // Process all complete lines (all but the last, which might be incomplete)
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
 
-    // Only process new content beyond what we've already processed
-    const newContent = partsContent.substring(lastProcessedIndex);
-    if (newContent.length === 0) {
-      return lastProcessedIndex;
-    }
+      try {
+        const jsonData = JSON.parse(line);
 
-    // Find complete part objects in the content
-    let braceCount = 0;
-    let inString = false;
-    let escapeNext = false;
-    let partStartPos = -1;
-
-    for (let i = lastProcessedIndex; i < partsContent.length; i++) {
-      const char = partsContent[i];
-
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-
-      if (char === "\\") {
-        escapeNext = true;
-        continue;
-      }
-
-      if (char === '"' && !escapeNext) {
-        inString = !inString;
-        continue;
-      }
-
-      if (inString) continue;
-
-      if (char === "{") {
-        if (braceCount === 0) {
-          partStartPos = i;
-        }
-        braceCount++;
-      } else if (char === "}") {
-        braceCount--;
-        if (braceCount === 0 && partStartPos !== -1) {
-          // We have a complete part object
-          const partJson = partsContent.substring(partStartPos, i + 1);
-
-          try {
-            const part = JSON.parse(partJson);
-
-            // Check if this is a valid part object with text
+        // Process each part in the JSON data
+        if (jsonData.content?.parts && Array.isArray(jsonData.content.parts)) {
+          for (const part of jsonData.content.parts) {
             if (part.text && typeof part.text === "string") {
               const partHash = this.hashPart(part);
 
               if (!sentParts.has(partHash)) {
                 createDebugLog(
-                  "COMPLETE PART",
-                  `Found new part (thought: ${
+                  "COMPLETE JSON LINE",
+                  `Processing part (thought: ${
                     part.thought
                   }): ${part.text.substring(0, 100)}...`
                 );
 
-                // Process this part through SSE processing pipeline
-                const sseData = {
-                  content: {
-                    parts: [part],
-                  },
-                  author: currentAgentRef.current || "goal_planning_agent",
-                };
-
+                // Process through SSE pipeline
                 processSseEventData(
-                  JSON.stringify(sseData),
+                  line, // Send the original complete JSON line
                   aiMessageId,
                   callbacks,
                   accumulatedTextRef,
@@ -523,17 +474,19 @@ export class StreamingConnectionManager {
                 );
 
                 sentParts.add(partHash);
-                lastProcessedIndex = i + 1;
+                break; // Only process one part per line to maintain order
               }
             }
-          } catch {
-            // Not a valid JSON object, continue
           }
         }
+      } catch (error) {
+        createDebugLog(
+          "JSON PARSE ERROR",
+          `Failed to parse line: ${line}`,
+          error
+        );
       }
     }
-
-    return lastProcessedIndex;
   }
 
   /**
