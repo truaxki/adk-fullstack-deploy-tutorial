@@ -104,11 +104,20 @@ class JSONFragmentProcessor {
     const partsStartIndex = partsMatch.index! + partsMatch[0].length;
     const partsContent = this.buffer.substring(partsStartIndex);
 
+    console.log(
+      `🔍 [BUFFER PROCESSING] Buffer size: ${this.buffer.length}, parts content size: ${partsContent.length}, lastProcessedIndex: ${this.lastProcessedIndex}`
+    );
+
     // Only process new content beyond what we've already processed
     const newContent = partsContent.substring(this.lastProcessedIndex);
     if (newContent.length === 0) {
+      console.log(`⏭️ [BUFFER PROCESSING] No new content to process, skipping`);
       return; // No new content to process
     }
+
+    console.log(
+      `🆕 [BUFFER PROCESSING] Processing ${newContent.length} bytes of new content`
+    );
 
     // Look for complete part objects within the NEW parts content only
     let braceCount = 0;
@@ -119,6 +128,10 @@ class JSONFragmentProcessor {
     // We need to track the full content for proper brace counting
     const fullContent = partsContent;
     const startSearchFrom = this.lastProcessedIndex;
+
+    console.log(
+      `🔍 [BUFFER PROCESSING] Searching from index ${startSearchFrom} to ${fullContent.length}`
+    );
 
     for (let i = startSearchFrom; i < fullContent.length; i++) {
       const char = fullContent[i];
@@ -158,26 +171,47 @@ class JSONFragmentProcessor {
             if (part.text && typeof part.text === "string") {
               const partHash = this.hashPart(part);
 
+              console.log(
+                `🎯 [BUFFER PROCESSING] Found complete part at index ${partStartPos}-${i}, hash: ${partHash}`
+              );
+
               if (!this.sentParts.has(partHash)) {
                 console.log(
                   `✅ [JSON PROCESSOR] Found new complete part (thought: ${part.thought}):`,
-                  part.text
+                  part.text.substring(0, 200) +
+                    (part.text.length > 200 ? "..." : "")
                 );
                 // Queue part for sequential streaming to maintain order
                 this.queuePartForStreaming(part, partHash);
 
                 // Update the last processed index to avoid reprocessing this part
-                this.lastProcessedIndex = i + 1;
+                const newIndex = i + 1;
+                console.log(
+                  `📍 [BUFFER PROCESSING] Updating lastProcessedIndex from ${this.lastProcessedIndex} to ${newIndex}`
+                );
+                this.lastProcessedIndex = newIndex;
+              } else {
+                console.log(
+                  `⚠️ [BUFFER PROCESSING] Part with hash ${partHash} already sent, skipping`
+                );
               }
             }
-          } catch {
+          } catch (parseError) {
             // Not a valid JSON object, continue
+            console.log(
+              `⚠️ [BUFFER PROCESSING] Failed to parse JSON at ${partStartPos}-${i}:`,
+              parseError
+            );
           }
 
           partStartPos = -1;
         }
       }
     }
+
+    console.log(
+      `🏁 [BUFFER PROCESSING] Completed processing, final lastProcessedIndex: ${this.lastProcessedIndex}`
+    );
   }
 
   /**
@@ -198,6 +232,13 @@ class JSONFragmentProcessor {
     part: AgentEngineContentPart,
     partHash: string
   ): void {
+    console.log(
+      `📥 [QUEUE] Queueing part for streaming with hash: ${partHash}`
+    );
+    console.log(
+      `📊 [QUEUE] Current queue status: ${this.sentParts.size} parts already sent`
+    );
+
     this.processingQueue = this.processingQueue
       .then(async () => {
         console.log(
@@ -208,11 +249,23 @@ class JSONFragmentProcessor {
         console.log(
           `✅ [JSON PROCESSOR] Completed streaming part with hash: ${partHash}`
         );
+        console.log(
+          `📊 [QUEUE] Queue progress: ${this.sentParts.size} parts completed`
+        );
       })
       .catch((error) => {
         console.error("❌ [JSON PROCESSOR] Error in streaming queue:", error);
+        console.error(
+          "❌ [QUEUE] Queue error stack:",
+          error instanceof Error ? error.stack : "No stack available"
+        );
+        console.error(`❌ [QUEUE] Failed part hash: ${partHash}`);
         // Don't rethrow to avoid breaking the queue
       });
+
+    console.log(
+      `📤 [QUEUE] Part queued successfully, queue will process sequentially`
+    );
   }
 
   /**
@@ -235,13 +288,15 @@ class JSONFragmentProcessor {
 
     try {
       for (let i = 0; i < chunks.length; i++) {
+        console.log(`🔄 [STREAMING] Starting chunk ${i + 1}/${chunks.length}`);
+
         const chunk = chunks[i];
 
-        // Create streaming chunk with original part metadata on first chunk only
+        // Create streaming chunk with consistent metadata - preserve thought flag for ALL chunks
         const streamingPart: AgentEngineContentPart = {
           text: chunk,
-          thought: i === 0 ? part.thought : undefined,
-          function_call: i === 0 ? part.function_call : undefined,
+          thought: part.thought, // Keep the same thought flag for ALL chunks from this part
+          function_call: i === 0 ? part.function_call : undefined, // Only first chunk gets function metadata
           function_response: i === 0 ? part.function_response : undefined,
         };
 
@@ -259,12 +314,40 @@ class JSONFragmentProcessor {
           chunk
         );
 
-        const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
-        this.controller.enqueue(new TextEncoder().encode(sseMessage));
+        try {
+          const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
+          console.log(
+            `🎯 [STREAMING] About to enqueue SSE message for chunk ${i + 1}`
+          );
+
+          this.controller.enqueue(new TextEncoder().encode(sseMessage));
+
+          console.log(
+            `✅ [STREAMING] Successfully enqueued chunk ${i + 1}/${
+              chunks.length
+            }`
+          );
+        } catch (enqueueError) {
+          console.error(
+            `❌ [STREAMING] Error enqueuing chunk ${i + 1}:`,
+            enqueueError
+          );
+          throw enqueueError;
+        }
 
         // Add small delay between chunks to simulate real-time streaming (like ADK)
         if (i < chunks.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms delay
+          console.log(`⏱️ [STREAMING] Waiting 100ms before next chunk...`);
+
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms delay
+            console.log(
+              `⏱️ [STREAMING] Delay completed, continuing to next chunk`
+            );
+          } catch (delayError) {
+            console.error(`❌ [STREAMING] Error in delay:`, delayError);
+            throw delayError;
+          }
         }
       }
 
@@ -273,6 +356,10 @@ class JSONFragmentProcessor {
       );
     } catch (error) {
       console.error(`❌ [JSON PROCESSOR] Error streaming part:`, error);
+      console.error(
+        `❌ [JSON PROCESSOR] Error stack:`,
+        error instanceof Error ? error.stack : "No stack available"
+      );
       throw error; // Re-throw to be caught by queue handler
     }
   }
