@@ -180,8 +180,8 @@ class JSONFragmentProcessor {
                   part.text.substring(0, 200) +
                     (part.text.length > 200 ? "..." : "")
                 );
-                // Send complete part directly to frontend with async yielding
-                this.emitCompletePartAsync(part);
+                // Send complete part directly to frontend immediately (real-time)
+                this.emitCompletePart(part);
                 this.sentParts.add(partHash);
 
                 // Update the last processed index to avoid reprocessing this part
@@ -226,54 +226,30 @@ class JSONFragmentProcessor {
   }
 
   /**
-   * Emit a complete part directly to the frontend
+   * Emit a complete part directly to the frontend as raw JSON (not SSE format)
+   * Agent Engine uses raw JSON streaming, not SSE
    */
   private emitCompletePart(part: AgentEngineContentPart): void {
     console.log(
-      `📤 [JSON PROCESSOR] Emitting complete part (thought: ${part.thought}):`,
+      `📤 [JSON PROCESSOR] Emitting complete part as raw JSON (thought: ${part.thought}):`,
       part.text?.substring(0, 200) +
         (part.text && part.text.length > 200 ? "..." : "")
     );
 
-    const sseData = {
+    const jsonData = {
       content: {
         parts: [part],
       },
       author: this.currentAgent || "goal_planning_agent",
     };
 
-    const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
-    this.controller.enqueue(new TextEncoder().encode(sseMessage));
+    // Send raw JSON directly (not SSE format) for Agent Engine
+    const jsonMessage = JSON.stringify(jsonData) + "\n";
+    this.controller.enqueue(new TextEncoder().encode(jsonMessage));
 
-    console.log(`✅ [JSON PROCESSOR] Successfully emitted complete part`);
-  }
-
-  /**
-   * Emit a complete part asynchronously with 50ms delay for proper streaming separation
-   */
-  private emitCompletePartAsync(part: AgentEngineContentPart): void {
-    // Use 50ms timeout to ensure parts are separated in time on the frontend
-    setTimeout(() => {
-      console.log(
-        `📤 [JSON PROCESSOR] Emitting complete part with 50ms delay (thought: ${part.thought}):`,
-        part.text?.substring(0, 200) +
-          (part.text && part.text.length > 200 ? "..." : "")
-      );
-
-      const sseData = {
-        content: {
-          parts: [part],
-        },
-        author: this.currentAgent || "goal_planning_agent",
-      };
-
-      const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
-      this.controller.enqueue(new TextEncoder().encode(sseMessage));
-
-      console.log(
-        `✅ [JSON PROCESSOR] Successfully emitted complete part with delay`
-      );
-    }, 50); // 50ms delay
+    console.log(
+      `✅ [JSON PROCESSOR] Successfully emitted complete part as raw JSON`
+    );
   }
 
   /**
@@ -495,11 +471,11 @@ export async function handleAgentEngineStreamRequest(
       },
     });
 
-    // Return streaming SSE response with proper headers
+    // Return streaming JSON response with proper headers (not SSE format)
     return new Response(stream, {
       status: 200,
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
         "Access-Control-Allow-Origin": "*",

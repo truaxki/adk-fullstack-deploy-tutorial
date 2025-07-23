@@ -164,11 +164,11 @@ export class StreamingConnectionManager {
   }
 
   /**
-   * Handle both SSE streaming and complete JSON responses
-   * - SSE streaming: Local backend with real-time event processing
-   * - Complete JSON: Agent Engine with single complete response
+   * Handle SSE streaming from both local backend and Agent Engine
+   * - Local backend: text/plain SSE events
+   * - Agent Engine: application/json SSE events with streaming parts
    *
-   * @param response - Fetch response (SSE stream or JSON)
+   * @param response - Fetch response with SSE stream
    * @param aiMessageId - AI message ID for updates
    * @param callbacks - Stream processing callbacks
    * @param accumulatedTextRef - Reference to accumulated text
@@ -185,10 +185,12 @@ export class StreamingConnectionManager {
   ): Promise<void> {
     const contentType = response.headers.get("content-type") || "";
 
-    // Check if this is a complete JSON response (Agent Engine) or SSE stream (local backend)
+    // Check response type:
+    // - Local backend: text/plain SSE events
+    // - Agent Engine: application/json streaming fragments (NOT SSE)
     if (contentType.includes("application/json")) {
-      // Handle complete JSON response from Agent Engine
-      await this.handleCompleteJSONResponse(
+      // Handle streaming JSON fragments from Agent Engine
+      await this.handleAgentEngineJsonStream(
         response,
         aiMessageId,
         callbacks,
@@ -347,17 +349,17 @@ export class StreamingConnectionManager {
   }
 
   /**
-   * Handle complete JSON response from Agent Engine
-   * Agent Engine returns complete responses instead of streaming
+   * Handle streaming JSON fragments from Agent Engine (not SSE format)
+   * Agent Engine sends raw JSON chunks that need to be assembled and processed
    *
-   * @param response - Fetch response with JSON data
+   * @param response - Fetch response with streaming JSON fragments
    * @param aiMessageId - AI message ID for updates
    * @param callbacks - Stream processing callbacks
    * @param accumulatedTextRef - Reference to accumulated text
    * @param currentAgentRef - Reference to current agent state
    * @param setCurrentAgent - Agent state setter
    */
-  private async handleCompleteJSONResponse(
+  private async handleAgentEngineJsonStream(
     response: Response,
     aiMessageId: string,
     callbacks: StreamProcessingCallbacks,
@@ -365,51 +367,181 @@ export class StreamingConnectionManager {
     currentAgentRef: React.MutableRefObject<string>,
     setCurrentAgent: (agent: string) => void
   ): Promise<void> {
-    try {
-      const jsonData = await response.json();
-      createDebugLog(
-        "JSON RESPONSE",
-        "Received complete JSON response from Agent Engine",
-        jsonData
-      );
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("No readable stream available");
+    }
 
-      // Check if this is the Agent Engine's complete response format
-      if (jsonData.complete && jsonData.content) {
-        // Agent Engine complete response format
-        const content = jsonData.content;
-        const agent = jsonData.agent || "agent_engine";
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const sentParts: Set<string> = new Set();
+    let lastProcessedIndex = 0;
 
-        // Update agent state
-        if (agent !== currentAgentRef.current) {
-          currentAgentRef.current = agent;
-          setCurrentAgent(agent);
-        }
+    createDebugLog("AGENT ENGINE", "Starting JSON fragment processing");
 
-        // Update accumulated text
-        accumulatedTextRef.current = content;
+    // Use recursive pump function to process JSON fragments
+    const pump = async (): Promise<void> => {
+      const { done, value } = await reader.read();
 
-        // Create complete message update
-        const completeMessage: Message = {
-          type: "ai",
-          content: content,
-          id: aiMessageId,
-          timestamp: new Date(),
-        };
-
-        // Send complete message update to UI
-        callbacks.onMessageUpdate(completeMessage);
-
+      if (value) {
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
         createDebugLog(
-          "JSON COMPLETE",
-          `Agent Engine message complete: ${content.length} characters`
+          "JSON FRAGMENT",
+          `Received ${chunk.length} bytes, buffer now ${buffer.length} bytes`
         );
-      } else {
-        // If it's not the expected format, treat it as an error
-        throw new Error("Unexpected response format from Agent Engine");
+
+        // Process any complete parts found in the buffer
+        lastProcessedIndex = this.processJsonFragmentBuffer(
+          buffer,
+          lastProcessedIndex,
+          sentParts,
+          aiMessageId,
+          callbacks,
+          accumulatedTextRef,
+          currentAgentRef,
+          setCurrentAgent
+        );
       }
+
+      if (done) {
+        createDebugLog("AGENT ENGINE", "JSON fragment stream completed");
+        return;
+      }
+
+      return pump();
+    };
+
+    try {
+      await pump();
     } catch (error) {
-      createDebugLog("JSON ERROR", "Error processing JSON response", error);
+      createDebugLog(
+        "AGENT ENGINE ERROR",
+        "Error processing JSON fragments",
+        error
+      );
       throw error;
     }
+  }
+
+  /**
+   * Process JSON fragment buffer to find and emit complete parts
+   * Returns the updated lastProcessedIndex
+   */
+  private processJsonFragmentBuffer(
+    buffer: string,
+    lastProcessedIndex: number,
+    sentParts: Set<string>,
+    aiMessageId: string,
+    callbacks: StreamProcessingCallbacks,
+    accumulatedTextRef: React.MutableRefObject<string>,
+    currentAgentRef: React.MutableRefObject<string>,
+    setCurrentAgent: (agent: string) => void
+  ): number {
+    // Look for the parts array start
+    const partsMatch = buffer.match(/"parts"\s*:\s*\[/);
+    if (!partsMatch) {
+      return lastProcessedIndex; // No parts array found yet
+    }
+
+    const partsStartIndex = partsMatch.index! + partsMatch[0].length;
+    const partsContent = buffer.substring(partsStartIndex);
+
+    // Only process new content beyond what we've already processed
+    const newContent = partsContent.substring(lastProcessedIndex);
+    if (newContent.length === 0) {
+      return lastProcessedIndex;
+    }
+
+    // Find complete part objects in the content
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    let partStartPos = -1;
+
+    for (let i = lastProcessedIndex; i < partsContent.length; i++) {
+      const char = partsContent[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === "{") {
+        if (braceCount === 0) {
+          partStartPos = i;
+        }
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+        if (braceCount === 0 && partStartPos !== -1) {
+          // We have a complete part object
+          const partJson = partsContent.substring(partStartPos, i + 1);
+
+          try {
+            const part = JSON.parse(partJson);
+
+            // Check if this is a valid part object with text
+            if (part.text && typeof part.text === "string") {
+              const partHash = this.hashPart(part);
+
+              if (!sentParts.has(partHash)) {
+                createDebugLog(
+                  "COMPLETE PART",
+                  `Found new part (thought: ${
+                    part.thought
+                  }): ${part.text.substring(0, 100)}...`
+                );
+
+                // Process this part through SSE processing pipeline
+                const sseData = {
+                  content: {
+                    parts: [part],
+                  },
+                  author: currentAgentRef.current || "goal_planning_agent",
+                };
+
+                processSseEventData(
+                  JSON.stringify(sseData),
+                  aiMessageId,
+                  callbacks,
+                  accumulatedTextRef,
+                  currentAgentRef,
+                  setCurrentAgent
+                );
+
+                sentParts.add(partHash);
+                lastProcessedIndex = i + 1;
+              }
+            }
+          } catch {
+            // Not a valid JSON object, continue
+          }
+        }
+      }
+    }
+
+    return lastProcessedIndex;
+  }
+
+  /**
+   * Generate a hash for a part to track if we've already sent it
+   */
+  private hashPart(part: { text?: string; thought?: boolean }): string {
+    const textPreview = part.text?.substring(0, 100) || "";
+    const thought = part.thought || false;
+    return `${textPreview}-${thought}-${textPreview.length}`;
   }
 }
