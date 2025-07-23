@@ -80,9 +80,7 @@ class JSONFragmentProcessor {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
     console.log(
       `📝 [JSON PROCESSOR] Raw chunk content:`,
-      JSON.stringify(
-        chunk.substring(0, 500) + (chunk.length > 500 ? "..." : "")
-      )
+      JSON.stringify(chunk)
     );
 
     this.buffer += chunk;
