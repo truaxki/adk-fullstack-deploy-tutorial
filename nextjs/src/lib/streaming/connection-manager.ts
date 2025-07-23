@@ -252,14 +252,36 @@ export class StreamingConnectionManager {
             );
 
             // Process the event immediately for real-time updates
-            processSseEventData(
-              jsonDataToParse,
-              aiMessageId,
-              callbacks,
-              accumulatedTextRef,
-              currentAgentRef,
-              setCurrentAgent
-            );
+            try {
+              try {
+                processSseEventData(
+                  jsonDataToParse,
+                  aiMessageId,
+                  callbacks,
+                  accumulatedTextRef,
+                  currentAgentRef,
+                  setCurrentAgent
+                );
+              } catch (error) {
+                console.error(
+                  "❌ [SSE ERROR] Failed to process final SSE event:",
+                  error
+                );
+                console.error(
+                  "❌ [SSE ERROR] Problematic JSON:",
+                  jsonDataToParse.substring(0, 500)
+                );
+              }
+            } catch (error) {
+              console.error(
+                "❌ [SSE ERROR] Failed to process SSE event:",
+                error
+              );
+              console.error(
+                "❌ [SSE ERROR] Problematic JSON:",
+                jsonDataToParse.substring(0, 500)
+              );
+            }
             eventDataBuffer = ""; // Reset for next event
           }
         } else if (line.startsWith("data:")) {
@@ -287,14 +309,25 @@ export class StreamingConnectionManager {
             jsonDataToParse.substring(0, 200) + "..."
           );
 
-          processSseEventData(
-            jsonDataToParse,
-            aiMessageId,
-            callbacks,
-            accumulatedTextRef,
-            currentAgentRef,
-            setCurrentAgent
-          );
+          try {
+            processSseEventData(
+              jsonDataToParse,
+              aiMessageId,
+              callbacks,
+              accumulatedTextRef,
+              currentAgentRef,
+              setCurrentAgent
+            );
+          } catch (error) {
+            console.error(
+              "❌ [SSE ERROR] Failed to process final SSE event:",
+              error
+            );
+            console.error(
+              "❌ [SSE ERROR] Problematic JSON:",
+              jsonDataToParse.substring(0, 500)
+            );
+          }
           eventDataBuffer = "";
         }
         createDebugLog("SSE END", "Stream processing finished");

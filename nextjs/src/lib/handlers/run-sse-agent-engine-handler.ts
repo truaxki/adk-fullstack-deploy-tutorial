@@ -76,7 +76,7 @@ class JSONFragmentProcessor {
    * Process incoming chunk of data from Agent Engine.
    * Accumulates chunks and looks for complete parts to stream immediately.
    */
-  processChunk(chunk: string): void {
+  async processChunk(chunk: string): Promise<void> {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
     console.log(
       `📝 [JSON PROCESSOR] Raw chunk content:`,
@@ -86,13 +86,13 @@ class JSONFragmentProcessor {
     this.buffer += chunk;
 
     // Look for complete part objects and stream them immediately
-    this.findAndStreamCompleteParts();
+    await this.findAndStreamCompleteParts();
   }
 
   /**
    * Find complete part objects in the buffer and stream them immediately
    */
-  private findAndStreamCompleteParts(): void {
+  private async findAndStreamCompleteParts(): Promise<void> {
     // Look for the parts array start
     const partsMatch = this.buffer.match(/"parts"\s*:\s*\[/);
     if (!partsMatch) {
@@ -153,13 +153,8 @@ class JSONFragmentProcessor {
                     100
                   )}...`
                 );
-                // Stream part asynchronously (don't await to avoid blocking)
-                this.streamPart(part).catch((error) =>
-                  console.error(
-                    "❌ [JSON PROCESSOR] Error streaming part:",
-                    error
-                  )
-                );
+                // Stream part sequentially to maintain order and timing
+                await this.streamPart(part);
                 this.sentParts.add(partHash);
               }
             }
@@ -451,7 +446,7 @@ export async function handleAgentEngineStreamRequest(
 
             if (value) {
               const chunk = decoder.decode(value, { stream: true });
-              processor.processChunk(chunk);
+              await processor.processChunk(chunk);
             }
 
             if (done) {
