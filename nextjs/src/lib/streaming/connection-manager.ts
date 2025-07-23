@@ -511,19 +511,26 @@ export class StreamingConnectionManager {
       setCurrentAgent(jsonData.author);
     }
 
-    // Add text to accumulated text
-    accumulatedTextRef.current += part.text;
+    // Handle thoughts vs regular content differently (same as SSE processing)
+    if (part.thought) {
+      // Process thoughts: send to onEventUpdate (same as processThoughts in SSE)
+      callbacks.onEventUpdate(aiMessageId, {
+        title: "🤔 AI Thinking",
+        data: { type: "thinking", content: part.text },
+      });
+    } else {
+      // Process regular content: add to accumulated text and send to onMessageUpdate
+      accumulatedTextRef.current += part.text;
 
-    // Create proper Message update for callback
-    const messageUpdate: Message = {
-      type: "ai",
-      content: accumulatedTextRef.current, // Use accumulated content
-      id: aiMessageId,
-      timestamp: new Date(),
-    };
+      const messageUpdate: Message = {
+        type: "ai",
+        content: accumulatedTextRef.current, // Use accumulated content
+        id: aiMessageId,
+        timestamp: new Date(),
+      };
 
-    // Call the message update callback
-    callbacks.onMessageUpdate(messageUpdate);
+      callbacks.onMessageUpdate(messageUpdate);
+    }
 
     createDebugLog(
       "AGENT ENGINE PROCESSED",
