@@ -431,6 +431,11 @@ export async function handleAgentEngineStreamRequest(
 
             if (value) {
               const chunk = decoder.decode(value, { stream: true });
+              console.log(
+                `⏰ [STREAMING] Received chunk at ${new Date().toISOString()}, size: ${
+                  chunk.length
+                } bytes`
+              );
               processor.processChunk(chunk);
             }
 
