@@ -153,7 +153,13 @@ class JSONFragmentProcessor {
                     100
                   )}...`
                 );
-                this.streamPart(part);
+                // Stream part asynchronously (don't await to avoid blocking)
+                this.streamPart(part).catch((error) =>
+                  console.error(
+                    "❌ [JSON PROCESSOR] Error streaming part:",
+                    error
+                  )
+                );
                 this.sentParts.add(partHash);
               }
             }
@@ -178,19 +184,93 @@ class JSONFragmentProcessor {
 
   /**
    * Stream a single part immediately to the frontend
+   * For large parts, split them into smaller chunks to simulate real-time streaming
    */
-  private streamPart(part: AgentEngineContentPart): void {
-    const sseData = {
-      content: {
-        parts: [part],
-      },
-      author: this.currentAgent || "goal_planning_agent",
-    };
+  private async streamPart(part: AgentEngineContentPart): Promise<void> {
+    if (!part.text) {
+      return;
+    }
 
-    console.log(`📤 [JSON PROCESSOR] Streaming complete part immediately`);
+    // Split large text into smaller streaming chunks (like ADK does naturally)
+    const chunks = this.splitTextIntoStreamingChunks(part.text);
 
-    const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
-    this.controller.enqueue(new TextEncoder().encode(sseMessage));
+    console.log(
+      `📤 [JSON PROCESSOR] Streaming part in ${chunks.length} chunks to simulate real-time SSE`
+    );
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+
+      // Create streaming chunk with original part metadata on first chunk only
+      const streamingPart: AgentEngineContentPart = {
+        text: chunk,
+        thought: i === 0 ? part.thought : undefined,
+        function_call: i === 0 ? part.function_call : undefined,
+        function_response: i === 0 ? part.function_response : undefined,
+      };
+
+      const sseData = {
+        content: {
+          parts: [streamingPart],
+        },
+        author: this.currentAgent || "goal_planning_agent",
+      };
+
+      console.log(
+        `📤 [JSON PROCESSOR] Emitting chunk ${i + 1}/${chunks.length} (${
+          chunk.length
+        } chars)`
+      );
+
+      const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
+      this.controller.enqueue(new TextEncoder().encode(sseMessage));
+
+      // Add small delay between chunks to simulate real-time streaming (like ADK)
+      if (i < chunks.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms delay
+      }
+    }
+  }
+
+  /**
+   * Split large text into smaller chunks for streaming (simulating ADK's natural behavior)
+   */
+  private splitTextIntoStreamingChunks(text: string): string[] {
+    const chunks: string[] = [];
+    const maxChunkSize = 150; // Smaller chunks for better streaming effect
+
+    // First try to split by sentences
+    const sentences = text.split(/(?<=[.!?])\s+/);
+
+    let currentChunk = "";
+
+    for (const sentence of sentences) {
+      // If adding this sentence would exceed max size, start new chunk
+      if (
+        currentChunk.length > 0 &&
+        (currentChunk + " " + sentence).length > maxChunkSize
+      ) {
+        chunks.push(currentChunk.trim());
+        currentChunk = sentence;
+      } else {
+        currentChunk =
+          currentChunk.length > 0 ? currentChunk + " " + sentence : sentence;
+      }
+    }
+
+    // Add final chunk
+    if (currentChunk.trim().length > 0) {
+      chunks.push(currentChunk.trim());
+    }
+
+    // If no sentences found, split by character count
+    if (chunks.length === 0 && text.length > 0) {
+      for (let i = 0; i < text.length; i += maxChunkSize) {
+        chunks.push(text.substring(i, i + maxChunkSize));
+      }
+    }
+
+    return chunks.filter((chunk) => chunk.length > 0);
   }
 
   /**
