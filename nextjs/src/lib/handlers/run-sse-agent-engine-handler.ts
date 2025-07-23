@@ -70,8 +70,8 @@ class JSONFragmentProcessor {
   ) {}
 
   /**
-   * Process incoming chunk of data from Agent Engine
-   * May contain partial or multiple JSON fragments
+   * Process incoming chunk of data from Agent Engine.
+   * It accumulates chunks until a valid JSON object can be parsed.
    */
   processChunk(chunk: string): void {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
@@ -84,126 +84,120 @@ class JSONFragmentProcessor {
 
     this.buffer += chunk;
 
-    // Try to extract complete JSON objects from buffer
-    this.extractCompleteFragments();
-  }
-
-  /**
-   * Extract complete JSON fragments from buffer
-   * Agent Engine sends JSON objects separated by newlines (usually)
-   */
-  private extractCompleteFragments(): void {
-    const lines = this.buffer.split("\n");
-
-    // Keep the last line in buffer (might be incomplete)
-    this.buffer = lines.pop() || "";
-
-    // Process complete lines as JSON fragments
-    for (const line of lines) {
-      if (line.trim()) {
-        this.processJSONFragment(line.trim());
-      }
-    }
-  }
-
-  /**
-   * Process a single JSON fragment and emit as SSE
-   */
-  private processJSONFragment(fragmentStr: string): void {
+    // Agent Engine sends a single JSON object in chunks, not newline-delimited fragments.
+    // We try to parse the buffer on each chunk. If it succeeds, we have the full response.
     try {
+      const fragment: AgentEngineFragment = JSON.parse(this.buffer);
+
+      // Successfully parsed the complete JSON object.
       console.log(
-        `📝 [JSON PROCESSOR] Processing fragment: ${fragmentStr.substring(
-          0,
-          100
-        )}...`
+        "✅ [JSON PROCESSOR] Parsed complete JSON object from buffer."
       );
-      console.log(
-        `🔍 [JSON PROCESSOR] Full fragment:`,
-        JSON.stringify(fragmentStr)
-      );
+      this.processCompleteFragment(fragment);
 
-      const fragment: AgentEngineFragment = JSON.parse(fragmentStr);
-      console.log(
-        `✅ [JSON PROCESSOR] Parsed fragment:`,
-        JSON.stringify(fragment, null, 2)
-      );
-
-      // Update agent if present
-      if (fragment.author && fragment.author !== this.currentAgent) {
-        this.currentAgent = fragment.author;
-      }
-
-      // Emit fragment in SSE format expected by existing frontend
-      if (fragment.content?.parts || fragment.author) {
-        this.emitSSEData(fragment);
-      }
-
-      // Handle usage metadata (for debugging)
-      if (fragment.usage_metadata) {
-        console.log(
-          `📊 [JSON PROCESSOR] Token usage:`,
-          fragment.usage_metadata
+      // Clear the buffer as we are done.
+      this.buffer = "";
+    } catch (error) {
+      // This is expected if the JSON is incomplete. We'll wait for more chunks.
+      if (error instanceof SyntaxError) {
+        // Log sparingly to avoid flooding console
+        if (this.buffer.length > 1024) {
+          console.log(
+            "📝 [JSON PROCESSOR] Buffer likely contains incomplete JSON, waiting for more chunks..."
+          );
+        }
+      } else {
+        console.error(
+          "❌ [JSON PROCESSOR] Unexpected error during chunk parsing:",
+          error
         );
       }
-    } catch (error) {
-      console.error(
-        "❌ [JSON PROCESSOR] Failed to parse JSON fragment:",
-        error
-      );
-      console.error("❌ [JSON PROCESSOR] Fragment content:", fragmentStr);
-      // Continue processing other fragments - don't let one bad fragment break the stream
     }
   }
 
   /**
-   * Emit fragment as SSE data in the format expected by existing frontend
+   * Once a complete JSON fragment is parsed, this method breaks it down
+   * into multiple SSE events, one for each "part".
    */
-  private emitSSEData(fragment: AgentEngineFragment): void {
-    // Convert Agent Engine format to format expected by extractDataFromSSE()
-    const sseData = {
-      content: fragment.content
-        ? {
-            parts: fragment.content.parts?.map((part) => ({
-              text: part.text,
-              thought: part.thought,
-              functionCall: part.function_call
-                ? {
-                    name: part.function_call.name,
-                    args: part.function_call.args,
-                    id: part.function_call.id,
-                  }
-                : undefined,
-              functionResponse: part.function_response
-                ? {
-                    name: part.function_response.name,
-                    response: part.function_response.response,
-                    id: part.function_response.id,
-                  }
-                : undefined,
-            })),
-          }
-        : undefined,
+  private processCompleteFragment(fragment: AgentEngineFragment): void {
+    console.log(
+      `✅ [JSON PROCESSOR] Processing complete fragment for agent: ${fragment.author}`
+    );
+
+    // Update current agent
+    if (fragment.author && fragment.author !== this.currentAgent) {
+      this.currentAgent = fragment.author;
+    }
+
+    // Emit each content part as a separate SSE event
+    if (fragment.content?.parts?.length) {
+      for (const part of fragment.content.parts) {
+        this.emitPartAsSSE(part, fragment.author);
+      }
+    }
+
+    // After all parts, send a final event with actions and metadata
+    // This can signal the end of the stream to the frontend.
+    const finalEventData = {
       author: fragment.author,
       actions: fragment.actions,
+      usage_metadata: fragment.usage_metadata,
+      invocation_id: fragment.invocation_id,
+      // Mark this as the final event for the frontend to use
+      isFinal: true,
     };
+    this.emitSSEData(finalEventData);
 
-    console.log(
-      `📡 [JSON PROCESSOR] Emitting SSE data for agent: ${fragment.author}`
-    );
-    console.log(
-      `📤 [JSON PROCESSOR] SSE data being emitted:`,
-      JSON.stringify(sseData, null, 2)
-    );
+    if (fragment.usage_metadata) {
+      console.log(`📊 [JSON PROCESSOR] Token usage:`, fragment.usage_metadata);
+    }
+  }
 
-    // Format as SSE event
-    const sseEvent = `data: ${JSON.stringify(sseData)}\n\n`;
-    console.log(
-      `📮 [JSON PROCESSOR] Final SSE event:`,
-      JSON.stringify(sseEvent)
-    );
-    const encodedData = new TextEncoder().encode(sseEvent);
+  /**
+   * Emits a single content part as an SSE event, formatted to match
+   * what the frontend's streaming infrastructure expects.
+   */
+  private emitPartAsSSE(part: AgentEngineContentPart, author?: string): void {
+    const sseData = {
+      content: {
+        parts: [
+          {
+            text: part.text,
+            thought: part.thought,
+            functionCall: part.function_call
+              ? {
+                  name: part.function_call.name,
+                  args: part.function_call.args,
+                  id: part.function_call.id,
+                }
+              : undefined,
+            functionResponse: part.function_response
+              ? {
+                  name: part.function_response.name,
+                  response: part.function_response.response,
+                  id: part.function_response.id,
+                }
+              : undefined,
+          },
+        ],
+      },
+      author: author || this.currentAgent,
+    };
+    this.emitSSEData(sseData);
+  }
 
+  /**
+   * Generic method to format and send any data object as an SSE event.
+   */
+  private emitSSEData(data: Record<string, unknown>): void {
     try {
+      console.log(
+        `📤 [JSON PROCESSOR] Emitting SSE data:`,
+        JSON.stringify(data, null, 2)
+      );
+      const sseEvent = `data: ${JSON.stringify(data)}\n\n`;
+      const encodedData = new TextEncoder().encode(sseEvent);
+
       this.controller.enqueue(encodedData);
     } catch (error) {
       console.error("❌ [JSON PROCESSOR] Failed to emit SSE data:", error);
@@ -211,14 +205,25 @@ class JSONFragmentProcessor {
   }
 
   /**
-   * Finalize processing when stream ends
+   * Finalize processing. The main logic runs in processChunk, but this
+   * handles any leftover buffer content in case of a premature stream end.
    */
   finalize(): void {
     console.log("🏁 [JSON PROCESSOR] Finalizing stream");
-
-    // Process any remaining buffer content
     if (this.buffer.trim()) {
-      this.processJSONFragment(this.buffer.trim());
+      console.warn(
+        "⚠️ [JSON PROCESSOR] Finalizing with non-empty buffer, attempting final parse."
+      );
+      try {
+        const fragment: AgentEngineFragment = JSON.parse(this.buffer);
+        this.processCompleteFragment(fragment);
+      } catch (error) {
+        console.error(
+          "❌ [JSON PROCESSOR] Failed to parse remaining buffer on finalize:",
+          this.buffer,
+          error
+        );
+      }
     }
   }
 }
@@ -280,8 +285,12 @@ export async function handleAgentEngineStreamRequest(
         if (errorText) {
           errorDetails += `. ${errorText}`;
         }
-      } catch {
+      } catch (error) {
         // Response body might not be available or already consumed
+        console.error(
+          "An error occurred while trying to read the error response body from Agent Engine:",
+          error
+        );
       }
       return createBackendConnectionError(
         "agent_engine",
@@ -428,11 +437,11 @@ export function validateAgentEngineConfig(): {
 
     return { isValid: true };
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return {
       isValid: false,
-      error: `Agent Engine configuration error: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`,
+      error: `Agent Engine configuration error: ${errorMessage}`,
     };
   }
 }

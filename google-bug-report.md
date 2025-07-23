@@ -117,3 +117,4 @@ The `alt=sse` parameter should format the response as proper Server-Sent Events 
 3. Consistent with other Google API implementations
 
 Let me know if you need any additional details or testing! 
+ 
