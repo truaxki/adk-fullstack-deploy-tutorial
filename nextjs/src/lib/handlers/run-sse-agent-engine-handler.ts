@@ -67,6 +67,7 @@ class JSONFragmentProcessor {
   private buffer: string = "";
   private currentAgent: string = "";
   private sentParts: Set<string> = new Set(); // Track sent parts by their content hash
+  private processingQueue: Promise<void> = Promise.resolve(); // Ensure sequential processing
 
   constructor(
     private controller: ReadableStreamDefaultController<Uint8Array>
@@ -76,7 +77,7 @@ class JSONFragmentProcessor {
    * Process incoming chunk of data from Agent Engine.
    * Accumulates chunks and looks for complete parts to stream immediately.
    */
-  async processChunk(chunk: string): Promise<void> {
+  processChunk(chunk: string): void {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
     console.log(
       `📝 [JSON PROCESSOR] Raw chunk content:`,
@@ -86,13 +87,13 @@ class JSONFragmentProcessor {
     this.buffer += chunk;
 
     // Look for complete part objects and stream them immediately
-    await this.findAndStreamCompleteParts();
+    this.findAndStreamCompleteParts();
   }
 
   /**
    * Find complete part objects in the buffer and stream them immediately
    */
-  private async findAndStreamCompleteParts(): Promise<void> {
+  private findAndStreamCompleteParts(): void {
     // Look for the parts array start
     const partsMatch = this.buffer.match(/"parts"\s*:\s*\[/);
     if (!partsMatch) {
@@ -148,14 +149,11 @@ class JSONFragmentProcessor {
 
               if (!this.sentParts.has(partHash)) {
                 console.log(
-                  `✅ [JSON PROCESSOR] Found new complete part: ${part.text.substring(
-                    0,
-                    100
-                  )}...`
+                  `✅ [JSON PROCESSOR] Found new complete part (thought: ${part.thought}):`,
+                  part.text
                 );
-                // Stream part sequentially to maintain order and timing
-                await this.streamPart(part);
-                this.sentParts.add(partHash);
+                // Queue part for sequential streaming to maintain order
+                this.queuePartForStreaming(part, partHash);
               }
             }
           } catch {
@@ -178,6 +176,23 @@ class JSONFragmentProcessor {
   }
 
   /**
+   * Queue a part for sequential streaming to prevent race conditions
+   */
+  private queuePartForStreaming(
+    part: AgentEngineContentPart,
+    partHash: string
+  ): void {
+    this.processingQueue = this.processingQueue
+      .then(async () => {
+        await this.streamPart(part);
+        this.sentParts.add(partHash);
+      })
+      .catch((error) => {
+        console.error("❌ [JSON PROCESSOR] Error in streaming queue:", error);
+      });
+  }
+
+  /**
    * Stream a single part immediately to the frontend
    * For large parts, split them into smaller chunks to simulate real-time streaming
    */
@@ -190,8 +205,9 @@ class JSONFragmentProcessor {
     const chunks = this.splitTextIntoStreamingChunks(part.text);
 
     console.log(
-      `📤 [JSON PROCESSOR] Streaming part in ${chunks.length} chunks to simulate real-time SSE`
+      `📤 [JSON PROCESSOR] Streaming part in ${chunks.length} chunks to simulate real-time SSE (thought: ${part.thought})`
     );
+    console.log(`📝 [JSON PROCESSOR] Full part text:`, part.text);
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
@@ -214,7 +230,8 @@ class JSONFragmentProcessor {
       console.log(
         `📤 [JSON PROCESSOR] Emitting chunk ${i + 1}/${chunks.length} (${
           chunk.length
-        } chars)`
+        } chars):`,
+        chunk
       );
 
       const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
@@ -275,6 +292,7 @@ class JSONFragmentProcessor {
     console.log(
       `✅ [JSON PROCESSOR] Processing complete fragment for agent: ${fragment.author}`
     );
+    console.log(`📋 [JSON PROCESSOR] Complete fragment content:`, fragment);
 
     this.currentAgent = fragment.author || "goal_planning_agent";
 
@@ -446,7 +464,7 @@ export async function handleAgentEngineStreamRequest(
 
             if (value) {
               const chunk = decoder.decode(value, { stream: true });
-              await processor.processChunk(chunk);
+              processor.processChunk(chunk);
             }
 
             if (done) {
