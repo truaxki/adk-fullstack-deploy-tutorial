@@ -185,10 +185,13 @@ export class StreamingConnectionManager {
   ): Promise<void> {
     const contentType = response.headers.get("content-type") || "";
 
+    createDebugLog("ROUTING", `Content-Type: ${contentType}`);
+
     // Check response type:
     // - Local backend: text/plain SSE events
     // - Agent Engine: application/json streaming fragments (NOT SSE)
     if (contentType.includes("application/json")) {
+      createDebugLog("ROUTING", "Taking Agent Engine JSON path");
       // Handle streaming JSON fragments from Agent Engine
       await this.handleAgentEngineJsonStream(
         response,
@@ -445,6 +448,11 @@ export class StreamingConnectionManager {
     for (let i = 0; i < lines.length - 1; i++) {
       const line = lines[i].trim();
       if (!line) continue;
+
+      createDebugLog(
+        "JSON LINE",
+        `Processing line: ${line.substring(0, 50)}...`
+      );
 
       try {
         const jsonData = JSON.parse(line);

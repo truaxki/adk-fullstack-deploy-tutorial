@@ -206,7 +206,7 @@ export function getEndpointForPath(
   if (shouldUseAgentEngine()) {
     // For Agent Engine, return the appropriate endpoint based on operation type
     if (endpointType === "streamQuery") {
-      return `${endpointConfig.agentEngineUrl}:streamQuery?alt=sse`;
+      return `${endpointConfig.agentEngineUrl}:streamQuery`;
     } else {
       return `${endpointConfig.agentEngineUrl}:query`;
     }

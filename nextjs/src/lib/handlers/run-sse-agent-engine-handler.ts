@@ -282,8 +282,8 @@ class JSONFragmentProcessor {
       if (fragment.isFinal) additionalData.isFinal = fragment.isFinal;
 
       console.log(`📤 [JSON PROCESSOR] Emitting final metadata`);
-      const sseMessage = `data: ${JSON.stringify(additionalData)}\n\n`;
-      this.controller.enqueue(new TextEncoder().encode(sseMessage));
+      const jsonMessage = JSON.stringify(additionalData) + "\n";
+      this.controller.enqueue(new TextEncoder().encode(jsonMessage));
     }
 
     // Log token usage if available
