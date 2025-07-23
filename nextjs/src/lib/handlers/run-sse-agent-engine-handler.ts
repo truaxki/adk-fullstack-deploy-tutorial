@@ -60,14 +60,13 @@ interface AgentEngineFragment {
 
 /**
  * Processes JSON fragments from Agent Engine streaming response.
- * Agent Engine sends a single large JSON object in chunks. We need to extract
- * complete "parts" from the growing JSON buffer and stream them immediately.
- * Handles parsing, accumulation, and SSE emission in existing frontend format
+ * Agent Engine sends a single large JSON object with parts.
+ * We look for complete part objects and stream them immediately when found.
  */
 class JSONFragmentProcessor {
   private buffer: string = "";
   private currentAgent: string = "";
-  private processedPartsCount: number = 0; // Track how many parts we've already processed
+  private sentParts: Set<string> = new Set(); // Track sent parts by their content hash
 
   constructor(
     private controller: ReadableStreamDefaultController<Uint8Array>
@@ -75,7 +74,7 @@ class JSONFragmentProcessor {
 
   /**
    * Process incoming chunk of data from Agent Engine.
-   * Accumulates chunks and attempts to extract complete parts as they become available.
+   * Accumulates chunks and looks for complete parts to stream immediately.
    */
   processChunk(chunk: string): void {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
@@ -88,105 +87,98 @@ class JSONFragmentProcessor {
 
     this.buffer += chunk;
 
-    // Try to extract complete parts from the growing buffer
-    this.extractAndStreamCompleteParts();
+    // Look for complete part objects and stream them immediately
+    this.findAndStreamCompleteParts();
   }
 
   /**
-   * Attempts to extract complete parts from the current buffer and stream them.
-   * This handles the case where we have an incomplete JSON object but some parts within it are complete.
+   * Find complete part objects in the buffer and stream them immediately
    */
-  private extractAndStreamCompleteParts(): void {
-    try {
-      // Try to find the start of the content.parts array
-      const contentPartsMatch = this.buffer.match(
-        /"content"\s*:\s*{\s*"parts"\s*:\s*\[/
-      );
-      if (!contentPartsMatch) {
-        console.log(
-          "📝 [JSON PROCESSOR] No content.parts array found yet, waiting for more chunks..."
-        );
-        return;
+  private findAndStreamCompleteParts(): void {
+    // Look for complete part objects using brace counting
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    let partStartPos = -1;
+
+    for (let i = 0; i < this.buffer.length; i++) {
+      const char = this.buffer[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
       }
 
-      const partsArrayStart =
-        contentPartsMatch.index! + contentPartsMatch[0].length;
+      if (char === "\\") {
+        escapeNext = true;
+        continue;
+      }
 
-      // Extract the parts array content (everything after the opening bracket)
-      const afterPartsStart = this.buffer.substring(partsArrayStart);
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
 
-      // Try to extract complete parts objects
-      let braceCount = 0;
-      let inString = false;
-      let escapeNext = false;
-      let partStartPos = -1;
-      let extractedPartsCount = 0;
+      if (inString) continue;
 
-      for (let i = 0; i < afterPartsStart.length; i++) {
-        const char = afterPartsStart[i];
-
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-
-        if (char === "\\") {
-          escapeNext = true;
-          continue;
-        }
-
-        if (char === '"' && !escapeNext) {
-          inString = !inString;
-          continue;
-        }
-
-        if (inString) continue;
-
-        if (char === "{") {
-          if (braceCount === 0) {
+      if (char === "{") {
+        if (braceCount === 0) {
+          // Check if this looks like the start of a part object
+          const beforeBrace = this.buffer.substring(Math.max(0, i - 20), i);
+          if (
+            beforeBrace.includes('"parts"') ||
+            beforeBrace.includes("[") ||
+            partStartPos === -1
+          ) {
             partStartPos = i;
           }
-          braceCount++;
-        } else if (char === "}") {
-          braceCount--;
-          if (braceCount === 0 && partStartPos !== -1) {
-            // We have a complete part object
-            const partJson = afterPartsStart.substring(partStartPos, i + 1);
+        }
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+        if (braceCount === 0 && partStartPos !== -1) {
+          // We have a complete object, check if it's a part
+          const objectJson = this.buffer.substring(partStartPos, i + 1);
 
-            // Only process parts we haven't processed yet
-            if (extractedPartsCount >= this.processedPartsCount) {
-              try {
-                const part = JSON.parse(partJson);
-                this.streamPart(part);
+          try {
+            const obj = JSON.parse(objectJson);
+
+            // Check if this looks like a part object (has text property)
+            if (obj.text && typeof obj.text === "string") {
+              const partHash = this.hashPart(obj);
+
+              if (!this.sentParts.has(partHash)) {
                 console.log(
-                  `✅ [JSON PROCESSOR] Extracted and streamed part ${
-                    this.processedPartsCount + 1
-                  }`
+                  `✅ [JSON PROCESSOR] Found new complete part: ${obj.text.substring(
+                    0,
+                    100
+                  )}...`
                 );
-              } catch (parseError) {
-                console.log(
-                  `⚠️ [JSON PROCESSOR] Failed to parse extracted part: ${parseError}`
-                );
+                this.streamPart(obj);
+                this.sentParts.add(partHash);
               }
             }
-
-            extractedPartsCount++;
-            partStartPos = -1;
+          } catch {
+            // Not valid JSON or not a part object, continue
           }
+
+          partStartPos = -1;
         }
       }
-
-      // Update our processed parts count
-      this.processedPartsCount = extractedPartsCount;
-    } catch {
-      console.log(
-        "📝 [JSON PROCESSOR] Buffer contains incomplete JSON, waiting for more chunks..."
-      );
     }
   }
 
   /**
-   * Stream a single part to the frontend in the expected SSE format
+   * Create a simple hash of a part to detect duplicates
+   */
+  private hashPart(part: AgentEngineContentPart): string {
+    return `${part.text?.substring(0, 50)}-${
+      part.thought
+    }-${!!part.function_call}`;
+  }
+
+  /**
+   * Stream a single part immediately to the frontend
    */
   private streamPart(part: AgentEngineContentPart): void {
     const sseData = {
@@ -196,7 +188,7 @@ class JSONFragmentProcessor {
       author: this.currentAgent || "goal_planning_agent",
     };
 
-    console.log(`📤 [JSON PROCESSOR] Emitting SSE data for single part`);
+    console.log(`📤 [JSON PROCESSOR] Streaming complete part immediately`);
 
     const sseMessage = `data: ${JSON.stringify(sseData)}\n\n`;
     this.controller.enqueue(new TextEncoder().encode(sseMessage));
@@ -211,23 +203,6 @@ class JSONFragmentProcessor {
     );
 
     this.currentAgent = fragment.author || "goal_planning_agent";
-
-    // Check if there are any remaining parts we haven't streamed yet
-    if (fragment.content?.parts) {
-      const remainingParts = fragment.content.parts.slice(
-        this.processedPartsCount
-      );
-
-      if (remainingParts.length > 0) {
-        console.log(
-          `📤 [JSON PROCESSOR] Streaming ${remainingParts.length} remaining parts`
-        );
-
-        for (const part of remainingParts) {
-          this.streamPart(part);
-        }
-      }
-    }
 
     // Stream any additional data (actions, usage_metadata, etc.)
     if (
