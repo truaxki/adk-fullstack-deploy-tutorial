@@ -94,88 +94,64 @@ class JSONFragmentProcessor {
   }
 
   /**
-   * Extract complete part objects from buffer using part-level parsing
-   * This finds individual complete part objects within the parts array
-   * and parses them separately, which is much more reliable than trying
-   * to parse the entire JSON response progressively.
+   * Extract complete part objects from buffer using JSON.parse()
+   * Much simpler than manual brace counting - just try to parse incrementally!
    */
   private extractCompletePartsFromBuffer(): void {
     // Find the start of the parts array if we haven't found it yet
-    let partsArrayStart = -1;
     const partsMatch = this.buffer.match(/"parts"\s*:\s*\[/);
     if (!partsMatch) {
       return; // No parts array found yet
     }
 
-    partsArrayStart = partsMatch.index! + partsMatch[0].length;
-
-    // Extract content starting from the parts array
+    const partsArrayStart = partsMatch.index! + partsMatch[0].length;
     const partsContent = this.buffer.substring(partsArrayStart);
 
-    // Look for complete part objects using brace counting
-    let braceCount = 0;
-    let inString = false;
-    let escapeNext = false;
-    let partStartPos = -1;
+    // Look for potential object starts and try to parse them
+    let searchPos = 0;
 
-    for (let i = 0; i < partsContent.length; i++) {
-      const char = partsContent[i];
+    while (searchPos < partsContent.length) {
+      // Find the next potential object start
+      const objStart = partsContent.indexOf("{", searchPos);
+      if (objStart === -1) break; // No more objects to find
 
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
+      // Try to parse increasingly larger substrings until we get a valid JSON
+      for (let endPos = objStart + 1; endPos <= partsContent.length; endPos++) {
+        const potentialJson = partsContent.substring(objStart, endPos);
 
-      if (char === "\\") {
-        escapeNext = true;
-        continue;
-      }
+        // Skip if it doesn't end with }
+        if (!potentialJson.endsWith("}")) continue;
 
-      if (char === '"' && !escapeNext) {
-        inString = !inString;
-        continue;
-      }
+        try {
+          const part = JSON.parse(potentialJson);
 
-      if (inString) continue;
+          // Check if this is a valid part object with text
+          if (part.text && typeof part.text === "string") {
+            const partHash = this.hashPart(part);
 
-      if (char === "{") {
-        if (braceCount === 0) {
-          partStartPos = i;
-        }
-        braceCount++;
-      } else if (char === "}") {
-        braceCount--;
-        if (braceCount === 0 && partStartPos !== -1) {
-          // We have a complete part object
-          const partJson = partsContent.substring(partStartPos, i + 1);
-
-          try {
-            const part = JSON.parse(partJson);
-
-            // Check if this is a valid part object with text
-            if (part.text && typeof part.text === "string") {
-              const partHash = this.hashPart(part);
-
-              if (!this.sentParts.has(partHash)) {
-                console.log(
-                  `✅ [JSON PROCESSOR] Found new part (thought: ${
-                    part.thought
-                  }): ${part.text.substring(0, 100)}...`
-                );
-                this.emitCompletePart(part);
-                this.sentParts.add(partHash);
-              }
+            if (!this.sentParts.has(partHash)) {
+              console.log(
+                `✅ [JSON PROCESSOR] Found new part (thought: ${
+                  part.thought
+                }): ${part.text.substring(0, 100)}...`
+              );
+              this.emitCompletePart(part);
+              this.sentParts.add(partHash);
             }
-          } catch (parseError) {
-            // Not a valid JSON object, continue
-            console.log(
-              `⚠️ [JSON PROCESSOR] Failed to parse part:`,
-              parseError
-            );
           }
 
-          partStartPos = -1;
+          // Successfully parsed! Move search position past this object
+          searchPos = objStart + potentialJson.length;
+          break; // Found a valid object, stop trying longer substrings
+        } catch {
+          // Not valid JSON yet, try a longer substring
+          continue;
         }
+      }
+
+      // If we couldn't parse anything starting from this position, move forward
+      if (searchPos <= objStart) {
+        searchPos = objStart + 1;
       }
     }
   }
