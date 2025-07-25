@@ -82,102 +82,98 @@ class JSONFragmentProcessor {
    */
   processChunk(chunk: string): void {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
-    console.log(
-      `📝 [JSON PROCESSOR] Raw chunk content:`,
-      JSON.stringify(chunk)
-    );
 
     this.buffer += chunk;
 
-    // Use improved JSON parsing approach instead of manual brace counting
+    // Use improved part-level parsing approach
     this.extractCompletePartsFromBuffer();
   }
 
   /**
-   * Extract complete JSON objects from buffer using progressive JSON.parse()
-   * This is much more reliable than manual brace counting and leverages
-   * JavaScript's native JSON parsing capabilities.
+   * Extract complete part objects from buffer using part-level parsing
+   * This finds individual complete part objects within the parts array
+   * and parses them separately, which is much more reliable than trying
+   * to parse the entire JSON response progressively.
    */
   private extractCompletePartsFromBuffer(): void {
-    console.log(
-      `🔍 [JSON PROCESSOR] Extracting from buffer length: ${this.buffer.length}`
-    );
+    // Find the start of the parts array if we haven't found it yet
+    let partsArrayStart = -1;
+    const partsMatch = this.buffer.match(/"parts"\s*:\s*\[/);
+    if (!partsMatch) {
+      return; // No parts array found yet
+    }
 
-    // Try to parse complete JSON objects from the buffer
-    // Start from the beginning and try increasingly larger substrings
-    for (let endPos = 1; endPos <= this.buffer.length; endPos++) {
-      const candidate = this.buffer.substring(0, endPos);
+    partsArrayStart = partsMatch.index! + partsMatch[0].length;
 
-      try {
-        const parsed = JSON.parse(candidate);
-        console.log(
-          `✅ [JSON PROCESSOR] Successfully parsed JSON at position ${endPos}:`,
-          parsed
-        );
+    // Extract content starting from the parts array
+    const partsContent = this.buffer.substring(partsArrayStart);
 
-        // Successfully parsed a complete JSON object
-        // Extract parts from it
-        if (parsed.content?.parts && Array.isArray(parsed.content.parts)) {
-          console.log(
-            `📋 [JSON PROCESSOR] Found ${parsed.content.parts.length} parts`
-          );
-          this.currentAgent = parsed.author || "goal_planning_agent";
+    // Look for complete part objects using brace counting
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    let partStartPos = -1;
 
-          for (const part of parsed.content.parts) {
+    for (let i = 0; i < partsContent.length; i++) {
+      const char = partsContent[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === "{") {
+        if (braceCount === 0) {
+          partStartPos = i;
+        }
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+        if (braceCount === 0 && partStartPos !== -1) {
+          // We have a complete part object
+          const partJson = partsContent.substring(partStartPos, i + 1);
+
+          try {
+            const part = JSON.parse(partJson);
+
+            // Check if this is a valid part object with text
             if (part.text && typeof part.text === "string") {
-              console.log(`🎯 [JSON PROCESSOR] Processing part: ${part.text}`);
               const partHash = this.hashPart(part);
 
               if (!this.sentParts.has(partHash)) {
                 console.log(
-                  `📤 [JSON PROCESSOR] Emitting new part: ${part.text}`
+                  `✅ [JSON PROCESSOR] Found new part (thought: ${
+                    part.thought
+                  }): ${part.text.substring(0, 100)}...`
                 );
                 this.emitCompletePart(part);
                 this.sentParts.add(partHash);
-              } else {
-                console.log(
-                  `⚠️ [JSON PROCESSOR] Skipping duplicate part: ${partHash}`
-                );
               }
             }
+          } catch (parseError) {
+            // Not a valid JSON object, continue
+            console.log(
+              `⚠️ [JSON PROCESSOR] Failed to parse part:`,
+              parseError
+            );
           }
-        } else {
-          console.log(`📝 [JSON PROCESSOR] No parts found in parsed JSON`);
-        }
 
-        // Remove the parsed JSON from buffer and continue
-        this.buffer = this.buffer.substring(endPos);
-        console.log(
-          `🔄 [JSON PROCESSOR] Remaining buffer after processing: ${this.buffer.substring(
-            0,
-            100
-          )}...`
-        );
-
-        // Recursively process remaining buffer
-        if (this.buffer.length > 0) {
-          this.extractCompletePartsFromBuffer();
+          partStartPos = -1;
         }
-        return;
-      } catch (error: unknown) {
-        // Not a complete JSON yet, continue expanding
-        // Only log every 50 characters to avoid spam
-        if (endPos % 50 === 0) {
-          console.log(
-            `🔍 [JSON PROCESSOR] JSON parse failed at position ${endPos}: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`
-          );
-        }
-        continue;
       }
     }
-
-    console.log(
-      `⏳ [JSON PROCESSOR] No complete JSON found in buffer, waiting for more chunks`
-    );
-    // If we get here, no complete JSON was found in the buffer
-    // This is normal - we're waiting for more chunks
   }
 
   /**
