@@ -10,8 +10,8 @@ import { Message } from "@/types";
 import { ProcessedEvent } from "@/components/ActivityTimeline";
 import { StreamProcessingCallbacks } from "./types";
 import { extractDataFromSSE } from "./sse-parser";
-import { createDebugLog } from "@/lib/handlers/run-sse-common";
 import { getEventTitle } from "./stream-utils";
+import { createDebugLog } from "../handlers/run-sse-common";
 
 /**
  * Processes SSE event data and triggers appropriate callbacks
