@@ -82,6 +82,10 @@ class JSONFragmentProcessor {
    */
   processChunk(chunk: string): void {
     console.log(`🔄 [JSON PROCESSOR] Processing chunk: ${chunk.length} bytes`);
+    console.log(
+      `📝 [JSON PROCESSOR] Full chunk content:`,
+      JSON.stringify(chunk)
+    );
 
     this.buffer += chunk;
 
