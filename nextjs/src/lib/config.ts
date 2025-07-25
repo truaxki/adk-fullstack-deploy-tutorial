@@ -201,7 +201,7 @@ export type AgentEngineEndpointType = "query" | "streamQuery";
  */
 export function getEndpointForPath(
   path: string,
-  endpointType: AgentEngineEndpointType = "query"
+  endpointType: AgentEngineEndpointType = "streamQuery"
 ): string {
   if (shouldUseAgentEngine()) {
     // For Agent Engine, return the appropriate endpoint based on operation type
@@ -214,13 +214,6 @@ export function getEndpointForPath(
 
   // For other deployments, append the path to the backend URL
   return `${endpointConfig.backendUrl}${path}`;
-}
-
-/**
- * Gets the Agent Engine query endpoint for session management operations
- */
-export function getAgentEngineQueryEndpoint(): string {
-  return getEndpointForPath("", "query");
 }
 
 /**
