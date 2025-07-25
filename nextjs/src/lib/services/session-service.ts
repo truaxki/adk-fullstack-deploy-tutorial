@@ -34,7 +34,7 @@ export class AgentEngineSessionService extends SessionService {
     userId: string,
     sessionId: string
   ): Promise<SessionCreationResult> {
-    const sessionEndpoint = getEndpointForPath("", "streamQuery");
+    const sessionEndpoint = getEndpointForPath("", "query");
 
     const createSessionPayload = {
       class_method: "create_session",
