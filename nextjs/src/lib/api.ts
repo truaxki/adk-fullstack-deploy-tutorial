@@ -77,7 +77,7 @@ export async function createSession(sessionId: string): Promise<SessionData> {
 // Check backend health
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const response = await fetch("/api/docs", {
+    const response = await fetch("/api/health", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

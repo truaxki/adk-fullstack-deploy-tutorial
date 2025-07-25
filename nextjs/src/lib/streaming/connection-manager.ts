@@ -6,6 +6,7 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
+import { RefObject } from "react";
 import { Message } from "@/types";
 import {
   SSEConnectionState,
@@ -14,7 +15,7 @@ import {
   ConnectionManagerOptions,
 } from "./types";
 import { processSseEventData } from "./stream-processor";
-import { createDebugLog } from "./stream-utils";
+import { createDebugLog } from "@/lib/handlers/run-sse-common";
 
 /**
  * Manages SSE streaming connections
@@ -51,8 +52,8 @@ export class StreamingConnectionManager {
   public async submitMessage(
     apiPayload: StreamingAPIPayload,
     callbacks: StreamProcessingCallbacks,
-    accumulatedTextRef: React.MutableRefObject<string>,
-    currentAgentRef: React.MutableRefObject<string>,
+    accumulatedTextRef: RefObject<string>,
+    currentAgentRef: RefObject<string>,
     setCurrentAgent: (agent: string) => void,
     setIsLoading: (loading: boolean) => void
   ): Promise<void> {
@@ -146,8 +147,8 @@ export class StreamingConnectionManager {
    * @param setIsLoading - Loading state setter
    */
   public cancelRequest(
-    accumulatedTextRef: React.MutableRefObject<string>,
-    currentAgentRef: React.MutableRefObject<string>,
+    accumulatedTextRef: RefObject<string>,
+    currentAgentRef: RefObject<string>,
     setCurrentAgent: (agent: string) => void,
     setIsLoading: (loading: boolean) => void
   ): void {
@@ -165,8 +166,7 @@ export class StreamingConnectionManager {
 
   /**
    * Handle SSE streaming from both local backend and Agent Engine
-   * - Local backend: text/plain SSE events
-   * - Agent Engine: application/json SSE events with streaming parts
+   * Both backends now send standard SSE format (text/event-stream)
    *
    * @param response - Fetch response with SSE stream
    * @param aiMessageId - AI message ID for updates
@@ -179,32 +179,21 @@ export class StreamingConnectionManager {
     response: Response,
     aiMessageId: string,
     callbacks: StreamProcessingCallbacks,
-    accumulatedTextRef: React.MutableRefObject<string>,
-    currentAgentRef: React.MutableRefObject<string>,
+    accumulatedTextRef: RefObject<string>,
+    currentAgentRef: RefObject<string>,
     setCurrentAgent: (agent: string) => void
   ): Promise<void> {
     const contentType = response.headers.get("content-type") || "";
 
-    createDebugLog("ROUTING", `Content-Type: ${contentType}`);
+    createDebugLog(
+      "ROUTING",
+      `Content-Type: ${contentType} - Processing as SSE`
+    );
 
-    // Check response type:
-    // - Local backend: text/plain SSE events
-    // - Agent Engine: application/json streaming fragments (NOT SSE)
-    if (contentType.includes("application/json")) {
-      createDebugLog("ROUTING", "Taking Agent Engine JSON path");
-      // Handle streaming JSON fragments from Agent Engine
-      await this.handleAgentEngineJsonStream(
-        response,
-        aiMessageId,
-        callbacks,
-        accumulatedTextRef,
-        currentAgentRef,
-        setCurrentAgent
-      );
-      return;
-    }
+    // Both local backend and Agent Engine now send standard SSE format
+    // No content-type branching needed - unified SSE processing for all backends
 
-    // Handle SSE streaming response from local backend
+    // Handle SSE streaming response from both backends
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error("No readable stream available");
@@ -351,209 +340,12 @@ export class StreamingConnectionManager {
     }
   }
 
-  /**
-   * Handle streaming JSON fragments from Agent Engine (not SSE format)
-   * Agent Engine sends raw JSON chunks that need to be assembled and processed
-   *
-   * @param response - Fetch response with streaming JSON fragments
-   * @param aiMessageId - AI message ID for updates
-   * @param callbacks - Stream processing callbacks
-   * @param accumulatedTextRef - Reference to accumulated text
-   * @param currentAgentRef - Reference to current agent state
-   * @param setCurrentAgent - Agent state setter
-   */
-  private async handleAgentEngineJsonStream(
-    response: Response,
-    aiMessageId: string,
-    callbacks: StreamProcessingCallbacks,
-    accumulatedTextRef: React.MutableRefObject<string>,
-    currentAgentRef: React.MutableRefObject<string>,
-    setCurrentAgent: (agent: string) => void
-  ): Promise<void> {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("No readable stream available");
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-    const sentParts: Set<string> = new Set();
-
-    createDebugLog("AGENT ENGINE", "Starting JSON line processing");
-
-    // Use recursive pump function to process complete JSON lines
-    const pump = async (): Promise<void> => {
-      const { done, value } = await reader.read();
-
-      if (value) {
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        createDebugLog(
-          "AGENT ENGINE",
-          `Received ${chunk.length} bytes, buffer now ${buffer.length} bytes`
-        );
-
-        // Process complete JSON lines (backend already processed fragments)
-        this.processCompleteJsonLines(
-          buffer,
-          sentParts,
-          aiMessageId,
-          callbacks,
-          accumulatedTextRef,
-          currentAgentRef,
-          setCurrentAgent
-        );
-
-        // Clear processed lines from buffer
-        const lines = buffer.split("\n");
-        buffer = lines[lines.length - 1]; // Keep incomplete line
-      }
-
-      if (done) {
-        createDebugLog("AGENT ENGINE", "JSON stream completed");
-        return;
-      }
-
-      return pump();
-    };
-
-    try {
-      await pump();
-    } catch (error) {
-      createDebugLog(
-        "AGENT ENGINE ERROR",
-        "Error processing JSON fragments",
-        error
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Process complete JSON lines sent from backend (no fragment processing needed)
-   */
-  private processCompleteJsonLines(
-    buffer: string,
-    sentParts: Set<string>,
-    aiMessageId: string,
-    callbacks: StreamProcessingCallbacks,
-    accumulatedTextRef: React.MutableRefObject<string>,
-    currentAgentRef: React.MutableRefObject<string>,
-    setCurrentAgent: (agent: string) => void
-  ): void {
-    // Split buffer into lines and process complete lines
-    const lines = buffer.split("\n");
-
-    // Process all complete lines (all but the last, which might be incomplete)
-    for (let i = 0; i < lines.length - 1; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      createDebugLog(
-        "JSON LINE",
-        `Processing line: ${line.substring(0, 50)}...`
-      );
-
-      try {
-        const jsonData = JSON.parse(line);
-
-        // Process each part in the JSON data
-        if (jsonData.content?.parts && Array.isArray(jsonData.content.parts)) {
-          for (const part of jsonData.content.parts) {
-            if (part.text && typeof part.text === "string") {
-              const partHash = this.hashPart(part);
-
-              if (!sentParts.has(partHash)) {
-                createDebugLog(
-                  "COMPLETE JSON LINE",
-                  `Processing part (thought: ${
-                    part.thought
-                  }): ${part.text.substring(0, 100)}...`
-                );
-
-                // Process Agent Engine JSON directly (no SSE pipeline needed)
-                this.processAgentEngineJsonPart(
-                  jsonData,
-                  part,
-                  aiMessageId,
-                  callbacks,
-                  accumulatedTextRef,
-                  currentAgentRef,
-                  setCurrentAgent
-                );
-
-                sentParts.add(partHash);
-                break; // Only process one part per line to maintain order
-              }
-            }
-          }
-        }
-      } catch (error) {
-        createDebugLog(
-          "JSON PARSE ERROR",
-          `Failed to parse line: ${line}`,
-          error
-        );
-      }
-    }
-  }
-
-  /**
-   * Process Agent Engine JSON part directly (no SSE conversion needed)
-   */
-  private processAgentEngineJsonPart(
-    jsonData: {
-      author?: string;
-      content?: { parts: Array<{ text: string; thought?: boolean }> };
-    },
-    part: { text: string; thought?: boolean },
-    aiMessageId: string,
-    callbacks: StreamProcessingCallbacks,
-    accumulatedTextRef: React.MutableRefObject<string>,
-    currentAgentRef: React.MutableRefObject<string>,
-    setCurrentAgent: (agent: string) => void
-  ): void {
-    // Update current agent
-    if (jsonData.author && jsonData.author !== currentAgentRef.current) {
-      currentAgentRef.current = jsonData.author;
-      setCurrentAgent(jsonData.author);
-    }
-
-    // Handle thoughts vs regular content differently (same as SSE processing)
-    if (part.thought) {
-      // Process thoughts: send to onEventUpdate (same as processThoughts in SSE)
-      callbacks.onEventUpdate(aiMessageId, {
-        title: "🤔 AI Thinking",
-        data: { type: "thinking", content: part.text },
-      });
-    } else {
-      // Process regular content: add to accumulated text and send to onMessageUpdate
-      accumulatedTextRef.current += part.text;
-
-      const messageUpdate: Message = {
-        type: "ai",
-        content: accumulatedTextRef.current, // Use accumulated content
-        id: aiMessageId,
-        timestamp: new Date(),
-      };
-
-      callbacks.onMessageUpdate(messageUpdate);
-    }
-
-    createDebugLog(
-      "AGENT ENGINE PROCESSED",
-      `Processed part directly (thought: ${part.thought}, author: ${
-        jsonData.author
-      }): ${part.text.substring(0, 100)}...`
-    );
-  }
-
-  /**
-   * Generate a hash for a part to track if we've already sent it
-   */
-  private hashPart(part: { text?: string; thought?: boolean }): string {
-    const textPreview = part.text?.substring(0, 100) || "";
-    const thought = part.thought || false;
-    return `${textPreview}-${thought}-${textPreview.length}`;
-  }
+  // Removed Agent Engine JSON processing methods:
+  // - handleAgentEngineJsonStream()
+  // - processCompleteJsonLines()
+  // - processAgentEngineJsonPart()
+  // - hashPart()
+  //
+  // These are no longer needed since Agent Engine now sends standard SSE format
+  // and uses the same processing pipeline as local backend.
 }

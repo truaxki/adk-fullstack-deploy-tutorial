@@ -148,36 +148,38 @@ export function useSession(): UseSessionReturn {
         Math.random().toString(36).substring(2, 10);
       const requestedSessionId = randomPart;
 
-      // First, create the session via the API to get the actual session ID
+      // Create the session using Server Action instead of HTTP call
       let actualSessionId = requestedSessionId;
       try {
-        const sessionResponse = await fetch(
-          `/api/apps/app/users/${sessionUserId}/sessions/${requestedSessionId}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
+        // Import Server Action dynamically to avoid circular dependencies in hooks
+        const { createSessionAction } = await import(
+          "@/lib/actions/session-actions"
         );
 
-        if (sessionResponse.ok) {
-          const sessionData = await sessionResponse.json();
+        const sessionResult = await createSessionAction(
+          sessionUserId,
+          requestedSessionId
+        );
+
+        if (sessionResult.success) {
           // For Agent Engine, use the actual session ID returned by the backend
-          actualSessionId = sessionData.sessionId || requestedSessionId;
+          actualSessionId = sessionResult.sessionId;
           console.log(
-            `✅ Session created: requested=${requestedSessionId}, actual=${actualSessionId}`
+            `✅ Session created via Server Action: requested=${requestedSessionId}, actual=${actualSessionId}`
           );
-          console.log(`📝 Session data:`, sessionData);
+          console.log(`📝 Session result:`, sessionResult);
         } else {
           console.warn(
-            "⚠️ Session creation API failed, using requested ID:",
-            sessionResponse.status
+            "⚠️ Session creation Server Action failed, using requested ID:",
+            sessionResult.error
           );
           // Fall back to using the requested ID
         }
       } catch (error) {
-        console.warn("Session creation API error, using requested ID:", error);
+        console.warn(
+          "Session creation Server Action error, using requested ID:",
+          error
+        );
         // Fall back to using the requested ID
       }
 

@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { GoalInput } from "@/types";
-import { getEndpointForPath, getAuthHeaders } from "@/lib/config";
 
 /**
  * Common types shared by all deployment strategies
@@ -16,22 +15,11 @@ export interface ValidationResult {
   error?: string;
 }
 
-export interface SessionCreationResult {
+// Legacy interface - use SessionCreationResult from session-service.ts instead
+export interface LegacySessionCreationResult {
   sessionId: string;
   created: boolean;
 }
-
-/**
- * SSE response headers used by all deployment strategies
- */
-export const SSE_HEADERS = {
-  "Content-Type": "text/event-stream",
-  "Cache-Control": "no-cache",
-  Connection: "keep-alive",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-} as const;
 
 /**
  * CORS headers for OPTIONS requests
@@ -132,107 +120,6 @@ export function formatGoalMessage(goal: GoalInput): string {
 }
 
 /**
- * Create session using the appropriate endpoint for deployment strategy
- */
-export async function createSessionForAgentEngine(
-  userId: string,
-  sessionId: string
-): Promise<SessionCreationResult> {
-  const sessionEndpoint = getEndpointForPath("", "query");
-
-  const createSessionPayload = {
-    class_method: "create_session",
-    input: {
-      user_id: userId,
-    },
-  };
-
-  try {
-    const authHeaders = await getAuthHeaders();
-    const createSessionResponse = await fetch(sessionEndpoint, {
-      method: "POST",
-      headers: {
-        ...authHeaders,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(createSessionPayload),
-    });
-
-    if (createSessionResponse.ok) {
-      const sessionData = await createSessionResponse.json();
-      const actualSessionId = sessionData.output?.id;
-      if (actualSessionId) {
-        return {
-          sessionId: actualSessionId,
-          created: true,
-        };
-      }
-    }
-
-    console.warn(
-      "Agent Engine session creation failed, using provided sessionId"
-    );
-    return {
-      sessionId,
-      created: false,
-    };
-  } catch (sessionError) {
-    console.warn("Agent Engine session creation warning:", sessionError);
-    return {
-      sessionId,
-      created: false,
-    };
-  }
-}
-
-/**
- * Create session for local backend deployment
- */
-export async function createSessionForLocalBackend(
-  userId: string,
-  sessionId: string
-): Promise<SessionCreationResult> {
-  const sessionEndpoint = getEndpointForPath(
-    `/apps/app/users/${userId}/sessions/${sessionId}`
-  );
-
-  try {
-    const sessionAuthHeaders = await getAuthHeaders();
-    const sessionResponse = await fetch(sessionEndpoint, {
-      method: "POST",
-      headers: {
-        ...sessionAuthHeaders,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
-    });
-
-    const success = sessionResponse.ok || sessionResponse.status === 409;
-
-    if (!success) {
-      console.error(
-        "Local backend session creation failed:",
-        sessionResponse.status,
-        await sessionResponse.text()
-      );
-    } else {
-      console.log("Local backend session created/verified successfully");
-    }
-
-    return {
-      sessionId,
-      created: success,
-    };
-  } catch (sessionError) {
-    console.error("Local backend session creation error:", sessionError);
-    return {
-      sessionId,
-      created: false,
-    };
-  }
-}
-
-/**
  * Centralized logging for goal planning operations
  */
 export function logGoalPlanningRequest(
@@ -245,31 +132,4 @@ export function logGoalPlanningRequest(
     `📡 Goal Planning API [${deploymentType}] - Session: ${sessionId}, User: ${userId}`
   );
   console.log(`📡 Goal:`, goal);
-}
-
-/**
- * Log streaming operation start
- */
-export function logStreamStart(
-  sessionId: string,
-  deploymentType: "agent_engine" | "local_backend"
-): void {
-  console.log(
-    `🚀 Starting ${deploymentType} goal planning stream for session: ${sessionId}`
-  );
-}
-
-/**
- * Log streaming response details
- */
-export function logStreamResponse(
-  status: number,
-  statusText: string,
-  headers: Headers,
-  deploymentType: "agent_engine" | "local_backend"
-): void {
-  console.log(
-    `📡 ${deploymentType} goal planning stream response status: ${status} ${statusText}`
-  );
-  console.log(`📡 Response headers:`, Object.fromEntries(headers.entries()));
 }

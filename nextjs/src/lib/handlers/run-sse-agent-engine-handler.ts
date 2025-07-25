@@ -12,6 +12,7 @@ import {
   formatAgentEnginePayload,
   logStreamStart,
   logStreamResponse,
+  SSE_HEADERS,
 } from "./run-sse-common";
 import {
   createInternalServerError,
@@ -62,12 +63,14 @@ interface AgentEngineFragment {
  * Processes JSON fragments from Agent Engine streaming response.
  * Agent Engine sends a single large JSON object with parts.
  * We look for complete part objects and stream them immediately when found.
+ *
+ * IMPROVED VERSION: Uses native JSON.parse() instead of manual brace counting
+ * for better reliability and performance.
  */
 class JSONFragmentProcessor {
   private buffer: string = "";
   private currentAgent: string = "";
   private sentParts: Set<string> = new Set(); // Track sent parts by their content hash
-  private lastProcessedIndex: number = 0; // Track how much of the buffer we've processed
 
   constructor(
     private controller: ReadableStreamDefaultController<Uint8Array>
@@ -86,132 +89,95 @@ class JSONFragmentProcessor {
 
     this.buffer += chunk;
 
-    // Look for complete part objects and stream them immediately
-    this.findAndStreamCompleteParts();
+    // Use improved JSON parsing approach instead of manual brace counting
+    this.extractCompletePartsFromBuffer();
   }
 
   /**
-   * Find complete part objects in the buffer and stream them immediately
+   * Extract complete JSON objects from buffer using progressive JSON.parse()
+   * This is much more reliable than manual brace counting and leverages
+   * JavaScript's native JSON parsing capabilities.
    */
-  private findAndStreamCompleteParts(): void {
-    // Look for the parts array start
-    const partsMatch = this.buffer.match(/"parts"\s*:\s*\[/);
-    if (!partsMatch) {
-      return; // No parts array found yet
-    }
-
-    const partsStartIndex = partsMatch.index! + partsMatch[0].length;
-    const partsContent = this.buffer.substring(partsStartIndex);
-
+  private extractCompletePartsFromBuffer(): void {
     console.log(
-      `🔍 [BUFFER PROCESSING] Buffer size: ${this.buffer.length}, parts content size: ${partsContent.length}, lastProcessedIndex: ${this.lastProcessedIndex}`
+      `🔍 [JSON PROCESSOR] Extracting from buffer length: ${this.buffer.length}`
     );
 
-    // Only process new content beyond what we've already processed
-    const newContent = partsContent.substring(this.lastProcessedIndex);
-    if (newContent.length === 0) {
-      console.log(`⏭️ [BUFFER PROCESSING] No new content to process, skipping`);
-      return; // No new content to process
-    }
+    // Try to parse complete JSON objects from the buffer
+    // Start from the beginning and try increasingly larger substrings
+    for (let endPos = 1; endPos <= this.buffer.length; endPos++) {
+      const candidate = this.buffer.substring(0, endPos);
 
-    console.log(
-      `🆕 [BUFFER PROCESSING] Processing ${newContent.length} bytes of new content`
-    );
+      try {
+        const parsed = JSON.parse(candidate);
+        console.log(
+          `✅ [JSON PROCESSOR] Successfully parsed JSON at position ${endPos}:`,
+          parsed
+        );
 
-    // Look for complete part objects within the NEW parts content only
-    let braceCount = 0;
-    let inString = false;
-    let escapeNext = false;
-    let partStartPos = -1;
+        // Successfully parsed a complete JSON object
+        // Extract parts from it
+        if (parsed.content?.parts && Array.isArray(parsed.content.parts)) {
+          console.log(
+            `📋 [JSON PROCESSOR] Found ${parsed.content.parts.length} parts`
+          );
+          this.currentAgent = parsed.author || "goal_planning_agent";
 
-    // We need to track the full content for proper brace counting
-    const fullContent = partsContent;
-    const startSearchFrom = this.lastProcessedIndex;
-
-    console.log(
-      `🔍 [BUFFER PROCESSING] Searching from index ${startSearchFrom} to ${fullContent.length}`
-    );
-
-    for (let i = startSearchFrom; i < fullContent.length; i++) {
-      const char = fullContent[i];
-
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-
-      if (char === "\\") {
-        escapeNext = true;
-        continue;
-      }
-
-      if (char === '"' && !escapeNext) {
-        inString = !inString;
-        continue;
-      }
-
-      if (inString) continue;
-
-      if (char === "{") {
-        if (braceCount === 0) {
-          partStartPos = i;
-        }
-        braceCount++;
-      } else if (char === "}") {
-        braceCount--;
-        if (braceCount === 0 && partStartPos !== -1) {
-          // We have a complete part object
-          const partJson = fullContent.substring(partStartPos, i + 1);
-
-          try {
-            const part = JSON.parse(partJson);
-
-            // Check if this is a valid part object
+          for (const part of parsed.content.parts) {
             if (part.text && typeof part.text === "string") {
+              console.log(`🎯 [JSON PROCESSOR] Processing part: ${part.text}`);
               const partHash = this.hashPart(part);
-
-              console.log(
-                `🎯 [BUFFER PROCESSING] Found complete part at index ${partStartPos}-${i}, hash: ${partHash}`
-              );
 
               if (!this.sentParts.has(partHash)) {
                 console.log(
-                  `✅ [JSON PROCESSOR] Found new complete part (thought: ${part.thought}):`,
-                  part.text.substring(0, 200) +
-                    (part.text.length > 200 ? "..." : "")
+                  `📤 [JSON PROCESSOR] Emitting new part: ${part.text}`
                 );
-                // Send complete part directly to frontend immediately (real-time)
                 this.emitCompletePart(part);
                 this.sentParts.add(partHash);
-
-                // Update the last processed index to avoid reprocessing this part
-                const newIndex = i + 1;
-                console.log(
-                  `📍 [BUFFER PROCESSING] Updating lastProcessedIndex from ${this.lastProcessedIndex} to ${newIndex}`
-                );
-                this.lastProcessedIndex = newIndex;
               } else {
                 console.log(
-                  `⚠️ [BUFFER PROCESSING] Part with hash ${partHash} already sent, skipping`
+                  `⚠️ [JSON PROCESSOR] Skipping duplicate part: ${partHash}`
                 );
               }
             }
-          } catch (parseError) {
-            // Not a valid JSON object, continue
-            console.log(
-              `⚠️ [BUFFER PROCESSING] Failed to parse JSON at ${partStartPos}-${i}:`,
-              parseError
-            );
           }
-
-          partStartPos = -1;
+        } else {
+          console.log(`📝 [JSON PROCESSOR] No parts found in parsed JSON`);
         }
+
+        // Remove the parsed JSON from buffer and continue
+        this.buffer = this.buffer.substring(endPos);
+        console.log(
+          `🔄 [JSON PROCESSOR] Remaining buffer after processing: ${this.buffer.substring(
+            0,
+            100
+          )}...`
+        );
+
+        // Recursively process remaining buffer
+        if (this.buffer.length > 0) {
+          this.extractCompletePartsFromBuffer();
+        }
+        return;
+      } catch (error: unknown) {
+        // Not a complete JSON yet, continue expanding
+        // Only log every 50 characters to avoid spam
+        if (endPos % 50 === 0) {
+          console.log(
+            `🔍 [JSON PROCESSOR] JSON parse failed at position ${endPos}: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
+        }
+        continue;
       }
     }
 
     console.log(
-      `🏁 [BUFFER PROCESSING] Completed processing, final lastProcessedIndex: ${this.lastProcessedIndex}`
+      `⏳ [JSON PROCESSOR] No complete JSON found in buffer, waiting for more chunks`
     );
+    // If we get here, no complete JSON was found in the buffer
+    // This is normal - we're waiting for more chunks
   }
 
   /**
@@ -226,29 +192,31 @@ class JSONFragmentProcessor {
   }
 
   /**
-   * Emit a complete part directly to the frontend as raw JSON (not SSE format)
-   * Agent Engine uses raw JSON streaming, not SSE
+   * Emit a complete part as SSE format to the frontend
+   * Converts from Agent Engine JSON fragments to standard SSE format
+   *
+   * IMPROVED: Now outputs proper SSE format for unified processing
    */
   private emitCompletePart(part: AgentEngineContentPart): void {
     console.log(
-      `📤 [JSON PROCESSOR] Emitting complete part as raw JSON (thought: ${part.thought}):`,
+      `📤 [JSON PROCESSOR] Emitting complete part as SSE format (thought: ${part.thought}):`,
       part.text?.substring(0, 200) +
         (part.text && part.text.length > 200 ? "..." : "")
     );
 
-    const jsonData = {
+    const sseData = {
       content: {
         parts: [part],
       },
       author: this.currentAgent || "goal_planning_agent",
     };
 
-    // Send raw JSON directly (not SSE format) for Agent Engine
-    const jsonMessage = JSON.stringify(jsonData) + "\n";
-    this.controller.enqueue(new TextEncoder().encode(jsonMessage));
+    // Convert to proper SSE format: data: {...}\n\n
+    const sseEvent = `data: ${JSON.stringify(sseData)}\n\n`;
+    this.controller.enqueue(Buffer.from(sseEvent));
 
     console.log(
-      `✅ [JSON PROCESSOR] Successfully emitted complete part as raw JSON`
+      `✅ [JSON PROCESSOR] Successfully emitted complete part as SSE format`
     );
   }
 
@@ -281,9 +249,10 @@ class JSONFragmentProcessor {
         additionalData.invocation_id = fragment.invocation_id;
       if (fragment.isFinal) additionalData.isFinal = fragment.isFinal;
 
-      console.log(`📤 [JSON PROCESSOR] Emitting final metadata`);
-      const jsonMessage = JSON.stringify(additionalData) + "\n";
-      this.controller.enqueue(new TextEncoder().encode(jsonMessage));
+      console.log(`📤 [JSON PROCESSOR] Emitting final metadata as SSE format`);
+      const sseEvent = `data: ${JSON.stringify(additionalData)}\n\n`;
+      // IMPROVED: Use Buffer.from() and emit SSE format
+      this.controller.enqueue(Buffer.from(sseEvent));
     }
 
     // Log token usage if available
@@ -476,17 +445,10 @@ export async function handleAgentEngineStreamRequest(
       },
     });
 
-    // Return streaming JSON response with proper headers (not SSE format)
+    // Return streaming SSE response with proper headers
     return new Response(stream, {
       status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
+      headers: SSE_HEADERS,
     });
   } catch (error) {
     console.error("❌ Agent Engine handler error:", error);

@@ -301,3 +301,23 @@ export function createErrorSSEEvent(
 
   return `data: ${JSON.stringify(errorEvent)}\n\n`;
 }
+
+/**
+ * Creates a debug log message with consistent formatting
+ * Consolidated from stream-utils.ts
+ *
+ * @param category - Log category (e.g., "SSE", "PARSER", "CONNECTION")
+ * @param message - Log message
+ * @param data - Optional data to include
+ */
+export function createDebugLog(
+  category: string,
+  message: string,
+  data?: unknown
+): void {
+  if (data !== undefined) {
+    console.log(`[${category}] ${message}:`, data);
+  } else {
+    console.log(`[${category}] ${message}`);
+  }
+}

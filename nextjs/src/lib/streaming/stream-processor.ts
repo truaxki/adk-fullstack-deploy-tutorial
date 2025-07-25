@@ -10,7 +10,7 @@ import { Message } from "@/types";
 import { ProcessedEvent } from "@/components/ActivityTimeline";
 import { StreamProcessingCallbacks } from "./types";
 import { extractDataFromSSE } from "./sse-parser";
-import { createDebugLog } from "./stream-utils";
+import { createDebugLog } from "@/lib/handlers/run-sse-common";
 import { getEventTitle } from "./stream-utils";
 
 /**
