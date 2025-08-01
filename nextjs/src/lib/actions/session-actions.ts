@@ -35,19 +35,3 @@ export async function createSessionAction(
     };
   }
 }
-
-/**
- * Server Action to create a session with auto-generated ID
- * Convenience function for when you don't have a specific session ID
- */
-export async function createNewSessionAction(
-  userId: string
-): Promise<SessionCreationResult> {
-  // Generate random session ID using the same approach as the frontend
-  const randomPart =
-    Math.random().toString(36).substring(2, 10) +
-    Math.random().toString(36).substring(2, 10);
-  const sessionId = randomPart;
-
-  return await createSessionAction(userId, sessionId);
-}

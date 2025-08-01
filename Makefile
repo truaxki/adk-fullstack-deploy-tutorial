@@ -11,7 +11,7 @@ dev-backend:
 dev-frontend:
 	npm --prefix nextjs run dev
 
-playground:
+adk-web:
 	uv run adk web --port 8501
 
 lint:

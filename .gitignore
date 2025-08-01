@@ -134,6 +134,7 @@ jspm_packages/
 .next
 .next/
 /out/
+.swc/
 
 # Next.js TypeScript
 next-env.d.ts
