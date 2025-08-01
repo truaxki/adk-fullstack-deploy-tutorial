@@ -40,10 +40,8 @@ Agent Engine requires a billing account:
 
 #### Required IAM Permissions
 Your account needs the following roles for Agent Engine deployment:
-- **Vertex AI Administrator** (`roles/aiplatform.admin`) - For Agent Engine operations
-- **Storage Admin** (`roles/storage.admin`) - For staging bucket access
-- **Cloud Build Editor** (`roles/cloudbuild.builds.editor`) - For building containers
-- **Service Usage Consumer** (`roles/serviceusage.serviceUsageConsumer`) - For API access
+- **Vertex AI User** - For Agent Engine operations
+- **Service Account Token Creator** - For API access
 
 **For production deployments**, create a dedicated service account with these specific roles instead of using your personal account.
 
@@ -148,17 +146,11 @@ The **Agent Engine** is the recommended deployment target for ADK agents. It pro
 Deploy your agent using the ADK CLI command:
 
 ```bash
-# Navigate to your agent directory
-cd path/to/your/agent/
+# Navigate to root directory of entire project
+cd root/directory/of/project
 
 # Simple deployment (everything configured via .env)
-uv run adk deploy agent_engine app
-
-# With optional display parameters
-adk deploy agent_engine \
---display_name="Research Assistant Agent" \
---description="An AI agent for research and analysis tasks" \
-app
+make deploy-adk
 ```
 
 ### Required Setup

@@ -15,7 +15,9 @@ root_agent = LlmAgent(
         thinking_config=genai_types.ThinkingConfig(include_thoughts=True)
     ),
     instruction=f"""
-    You are an intelligent goal planning and execution agent. Your primary function is to take any user goal or request and systematically break it down into concrete, actionable tasks and subtasks.
+    You are an intelligent goal planning and execution agent.
+    Your primary function is to take any user goal or request and systematically
+    break it down into concrete, actionable tasks and subtasks.
 
     **Your Core Capabilities:**
     1. **Goal Analysis**: Understand and analyze user goals, requests, or questions

@@ -95,6 +95,7 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
     print(f"📋 Deploying agent: {deployment_config.agent_name}")
     print(f"📋 Project: {deployment_config.project}")
     print(f"📋 Location: {deployment_config.location}")
+    print(f"📋 Staging bucket: {deployment_config.staging_bucket}")
 
     # Step 2: Set up environment variables for the deployed agent
     env_vars = {}
@@ -105,21 +106,14 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
     env_vars["NUM_WORKERS"] = "1"
 
     # Step 3: Create required Google Cloud Storage buckets
-    staging_bucket_name = f"{deployment_config.project}-agent-engine"
     artifacts_bucket_name = (
         f"{deployment_config.project}-{deployment_config.agent_name}-logs-data"
     )
 
-    print(f"📦 Creating staging bucket: {staging_bucket_name}")
     print(f"📦 Creating artifacts bucket: {artifacts_bucket_name}")
 
     create_bucket_if_not_exists(
         bucket_name=artifacts_bucket_name,
-        project=deployment_config.project,
-        location=deployment_config.location,
-    )
-    create_bucket_if_not_exists(
-        bucket_name=staging_bucket_name,
         project=deployment_config.project,
         location=deployment_config.location,
     )
@@ -128,7 +122,7 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
     vertexai.init(
         project=deployment_config.project,
         location=deployment_config.location,
-        staging_bucket=f"gs://{staging_bucket_name}",
+        staging_bucket=f"gs://{deployment_config.staging_bucket}",
     )
 
     # Step 5: Read requirements file

@@ -84,10 +84,10 @@ class AgentConfiguration:
         # Set staging bucket (required for Agent Engine deployment)
         self.staging_bucket = os.environ.get("GOOGLE_CLOUD_STAGING_BUCKET")
         if not self.staging_bucket:
-            print(
-                "⚠️  Warning: GOOGLE_CLOUD_STAGING_BUCKET not set!\n"
-                "   This is required for Agent Engine deployment.\n"
-                "   Please add it to your .env file."
+            raise ValueError(
+                "❌ Missing GOOGLE_CLOUD_STAGING_BUCKET environment variable!\n"
+                "This is required for Agent Engine deployment.\n"
+                "Please add it to your .env file."
             )
 
     @property
@@ -116,7 +116,7 @@ class DeploymentConfiguration:
     agent_name: str
     requirements_file: str
     extra_packages: list[str]
-    staging_bucket: str | None
+    staging_bucket: str
 
 
 # =============================================================================
@@ -171,6 +171,13 @@ def get_deployment_config() -> DeploymentConfiguration:
             "❌ Project ID validation failed. This should not happen after __post_init__."
         )
 
+    if not config.staging_bucket:
+        raise ValueError(
+            "❌ Missing GOOGLE_CLOUD_STAGING_BUCKET environment variable!\n"
+            "This is required for Agent Engine deployment.\n"
+            "Please add it to your .env file."
+        )
+
     # Use centralized agent name from config
     agent_name = config.deployment_name
     if not agent_name:
@@ -196,14 +203,6 @@ def get_deployment_config() -> DeploymentConfiguration:
         raise ValueError(
             "❌ No extra packages specified. Please set EXTRA_PACKAGES in .env file "
             "or ensure './app' directory exists"
-        )
-
-    # Validate staging bucket is set for deployment
-    if not config.staging_bucket:
-        raise ValueError(
-            "❌ Missing GOOGLE_CLOUD_STAGING_BUCKET environment variable!\n"
-            "This is required for Agent Engine deployment.\n"
-            "Please add it to your .env file."
         )
 
     return DeploymentConfiguration(
