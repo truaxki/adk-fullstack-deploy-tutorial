@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { Message } from "@/types";
 import { ProcessedEvent } from "@/components/ActivityTimeline";
 import { StreamingConnectionManager } from "@/lib/streaming/connection-manager";
@@ -20,7 +21,6 @@ export interface UseStreamingReturn {
     onEventUpdate: (messageId: string, event: ProcessedEvent) => void,
     onWebsiteCountUpdate: (count: number) => void
   ) => Promise<void>;
-  cancelStream: () => void;
 
   getEventTitle: (agentName: string) => string;
 }
@@ -62,6 +62,9 @@ export function useStreaming(
         throw new Error("Connection manager not initialized");
       }
 
+      // Generate AI message ID (frontend generates ID for streaming correlation)
+      const aiMessageId = uuidv4();
+
       // Create callbacks object for the connection manager
       const callbacks: StreamProcessingCallbacks = {
         onMessageUpdate,
@@ -83,23 +86,12 @@ export function useStreaming(
         accumulatedTextRef,
         currentAgentRef,
         setCurrentAgent,
-        setIsLoading
+        setIsLoading,
+        aiMessageId
       );
     },
     []
   );
-
-  // Cancel streaming operation
-  const cancelStream = useCallback((): void => {
-    if (connectionManager.current) {
-      connectionManager.current.cancelRequest(
-        accumulatedTextRef,
-        currentAgentRef,
-        setCurrentAgent,
-        setIsLoading
-      );
-    }
-  }, []);
 
   const getEventTitleCallback = useCallback((agentName: string): string => {
     return getEventTitle(agentName);
@@ -112,7 +104,6 @@ export function useStreaming(
 
     // Operations
     startStream,
-    cancelStream,
 
     // Utilities
     getEventTitle: getEventTitleCallback,

@@ -4,13 +4,18 @@
  * This module handles the processing of parsed SSE data into UI updates.
  * It coordinates message updates, event timeline updates, and website count updates
  * based on the parsed SSE data.
+ *
+ * Implements the Official ADK Termination Signal Pattern:
+ * - Streaming chunks are accumulated and displayed progressively
+ * - Complete responses are used as termination signals (not displayed)
+ * - When complete response matches accumulated text, streaming stops
  */
 
+import { flushSync } from "react-dom";
 import { Message } from "@/types";
 import { ProcessedEvent } from "@/components/ActivityTimeline";
 import { StreamProcessingCallbacks } from "./types";
 import { extractDataFromSSE } from "./sse-parser";
-import { getEventTitle } from "./stream-utils";
 import { createDebugLog } from "../handlers/run-sse-common";
 
 /**
@@ -27,14 +32,14 @@ import { createDebugLog } from "../handlers/run-sse-common";
  * @param currentAgentRef - Reference to current agent state
  * @param setCurrentAgent - State setter for current agent
  */
-export function processSseEventData(
+export async function processSseEventData(
   jsonData: string,
   aiMessageId: string,
   callbacks: StreamProcessingCallbacks,
   accumulatedTextRef: { current: string },
   currentAgentRef: { current: string },
   setCurrentAgent: (agent: string) => void
-): void {
+): Promise<void> {
   const {
     textParts,
     thoughtParts,
@@ -46,22 +51,9 @@ export function processSseEventData(
     sources,
   } = extractDataFromSSE(jsonData);
 
-  createDebugLog("SSE HANDLER", "Processing SSE event", {
-    agent,
-    textParts: textParts.length,
-    thoughtParts: thoughtParts.length,
-    sourceCount,
-  });
-
-  // Update website count if sources found
-  if (sourceCount > 0) {
-    createDebugLog(
-      "SSE HANDLER",
-      "Updating websiteCount. Current sourceCount:",
-      sourceCount
-    );
-    callbacks.onWebsiteCountUpdate(Math.max(sourceCount, 0));
-  }
+  // Use frontend-generated aiMessageId for consistent message correlation
+  // Backend sends different IDs for each SSE event, which would create separate messages
+  const actualMessageId = aiMessageId;
 
   // Update current agent if changed
   if (agent && agent !== currentAgentRef.current) {
@@ -69,34 +61,43 @@ export function processSseEventData(
     setCurrentAgent(agent);
   }
 
+  // Update website count if sources found
+  if (sourceCount > 0) {
+    callbacks.onWebsiteCountUpdate(Math.max(sourceCount, 0));
+  }
+
   // Process function calls
   if (functionCall) {
-    processFunctionCall(functionCall, aiMessageId, callbacks.onEventUpdate);
+    processFunctionCall(functionCall, actualMessageId, callbacks.onEventUpdate);
   }
 
   // Process function responses
   if (functionResponse) {
     processFunctionResponse(
       functionResponse,
-      aiMessageId,
+      actualMessageId,
       callbacks.onEventUpdate
     );
   }
 
   // Process AI thoughts - show in timeline for transparency
   if (thoughtParts.length > 0) {
-    processThoughts(thoughtParts, agent, aiMessageId, callbacks.onEventUpdate);
+    processThoughts(
+      thoughtParts,
+      agent,
+      actualMessageId,
+      callbacks.onEventUpdate
+    );
   }
 
-  // Process text content - different handling based on agent type (like working example)
+  // Process text content using OFFICIAL ADK TERMINATION SIGNAL PATTERN
   if (textParts.length > 0) {
-    processTextContent(
+    await processTextContent(
       textParts,
       agent,
-      aiMessageId,
+      actualMessageId,
       accumulatedTextRef,
-      callbacks.onMessageUpdate,
-      callbacks.onEventUpdate
+      callbacks.onMessageUpdate
     );
   }
 
@@ -107,27 +108,27 @@ export function processSseEventData(
       "Adding Retrieved Sources timeline event:",
       sources
     );
-    callbacks.onEventUpdate(aiMessageId, {
+    callbacks.onEventUpdate(actualMessageId, {
       title: "Retrieved Sources",
       data: { type: "sources", content: sources },
     });
   }
 
-  // Handle final report with citations (like working example)
+  // Handle final report with citations - use existing message ID, don't create fake messages
   if (agent === "report_composer_with_citations" && finalReportWithCitations) {
     createDebugLog(
       "SSE HANDLER",
-      "Creating final report message for agent:",
+      "Updating existing message with final report for agent:",
       agent
     );
-    const finalReportMessageId = Date.now().toString() + "_final";
-    const finalReportMessage: Message = {
+    // Update the existing message with the final report content
+    // Don't create a new message with fake ID - use the aiMessageId from backend events
+    callbacks.onMessageUpdate({
       type: "ai",
       content: String(finalReportWithCitations),
-      id: finalReportMessageId,
-      timestamp: new Date(),
-    };
-    callbacks.onMessageUpdate(finalReportMessage);
+      id: aiMessageId, // Use the real backend-provided ID
+      timestamp: new Date(Date.now()), // For now, but this should come from backend too
+    });
   }
 }
 
@@ -229,49 +230,39 @@ function processThoughts(
  * @param aiMessageId - AI message ID
  * @param accumulatedTextRef - Reference to accumulated text
  * @param onMessageUpdate - Message update callback
- * @param onEventUpdate - Event update callback for timeline
  */
-function processTextContent(
+async function processTextContent(
   textParts: string[],
   agent: string,
   aiMessageId: string,
   accumulatedTextRef: { current: string },
-  onMessageUpdate: (message: Message) => void,
-  onEventUpdate: (messageId: string, event: ProcessedEvent) => void
-): void {
-  // Handle different agent types like the working example
-  if (
-    agent === "goal_planning_agent" ||
-    agent === "interactive_planner_agent" ||
-    agent === "root_agent"
-  ) {
-    // MAIN PLANNING AGENT → Stream text directly to main message (real-time effect)
-    createDebugLog(
-      "SSE HANDLER",
-      `Streaming text directly to main message for agent: ${agent}`
-    );
-    for (const text of textParts) {
-      accumulatedTextRef.current += text + " ";
-      const updatedMessage: Message = {
-        type: "ai",
-        content: accumulatedTextRef.current.trim(),
-        id: aiMessageId,
-        timestamp: new Date(),
-      };
-      onMessageUpdate(updatedMessage);
+  onMessageUpdate: (message: Message) => void
+): Promise<void> {
+  // Process each text chunk using OFFICIAL ADK TERMINATION SIGNAL PATTERN
+  for (const text of textParts) {
+    const currentAccumulated = accumulatedTextRef.current;
+
+    // 🎯 OFFICIAL ADK TERMINATION SIGNAL PATTERN (matches Angular implementation):
+    // if (newChunk == this.streamingTextMessage.text) { return; }
+    if (text === currentAccumulated && currentAccumulated.length > 0) {
+      // Official ADK pattern: this is the termination signal, don't add to UI
+      return;
     }
-  } else if (agent !== "report_composer_with_citations") {
-    // OTHER AGENTS → Timeline events only (research, function calls, etc.)
-    // BUT NOT for final report composition
-    const eventTitle = getEventTitle(agent);
-    createDebugLog(
-      "SSE HANDLER",
-      `Adding Text timeline event for agent: ${agent} with title: ${eventTitle}`
-    );
-    onEventUpdate(aiMessageId, {
-      title: eventTitle,
-      data: { type: "text", content: textParts.join(" ") },
+
+    // This is a streaming chunk - add it to accumulated text and display
+    // Official ADK pattern: direct concatenation (no spaces between chunks)
+    accumulatedTextRef.current += text; // Direct concatenation like official ADK
+
+    const updatedMessage: Message = {
+      type: "ai",
+      content: accumulatedTextRef.current.trim(),
+      id: aiMessageId,
+      timestamp: new Date(),
+    };
+
+    // Force immediate update to prevent React batching
+    flushSync(() => {
+      onMessageUpdate(updatedMessage);
     });
   }
-  // Note: report_composer_with_citations is handled separately in main function
 }

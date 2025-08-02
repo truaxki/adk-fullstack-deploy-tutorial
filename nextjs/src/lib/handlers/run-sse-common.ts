@@ -8,6 +8,13 @@
 import { NextRequest } from "next/server";
 
 /**
+ * Gets the ADK app name from environment or defaults
+ */
+function getAdkAppName(): string {
+  return process.env.ADK_APP_NAME || "app";
+}
+
+/**
  * Common request data structure for streaming
  */
 export interface ProcessedStreamRequest {
@@ -183,7 +190,7 @@ export function formatLocalBackendPayload(
   requestData: ProcessedStreamRequest
 ): LocalBackendPayload {
   return {
-    appName: "app",
+    appName: getAdkAppName(),
     userId: requestData.userId,
     sessionId: requestData.sessionId,
     newMessage: {

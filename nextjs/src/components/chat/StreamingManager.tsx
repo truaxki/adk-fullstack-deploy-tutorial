@@ -19,7 +19,6 @@ export interface StreamingManagerReturn {
   isLoading: boolean;
   currentAgent: string;
   submitMessage: (message: string) => Promise<void>;
-  cancelStream: () => void;
 }
 
 /**
@@ -36,7 +35,7 @@ export function useStreamingManager({
 }: StreamingManagerProps): StreamingManagerReturn {
   const { retryWithBackoff } = useBackendHealth();
 
-  const { isLoading, currentAgent, startStream, cancelStream } =
+  const { isLoading, currentAgent, startStream } =
     useStreaming(retryWithBackoff);
 
   // Notify parent of loading state changes
@@ -85,6 +84,5 @@ export function useStreamingManager({
     isLoading,
     currentAgent,
     submitMessage,
-    cancelStream,
   };
 }

@@ -10,6 +10,7 @@ import { ProcessedEvent } from "@/components/ActivityTimeline";
  * Parsed SSE data structure returned by the parser
  */
 export interface ParsedSSEData {
+  messageId?: string; // Message ID from backend
   textParts: string[];
   thoughtParts: string[];
   agent: string;
@@ -32,6 +33,7 @@ export interface ParsedSSEData {
  * Raw SSE parsed JSON structure from the backend
  */
 export interface RawSSEData {
+  id?: string; // Message ID from backend
   content?: {
     parts?: Array<{
       text?: string;

@@ -5,10 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function generateId(): string {
-  return Date.now().toString() + "_" + Math.random().toString(36).substr(2, 9);
-}
-
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 10,

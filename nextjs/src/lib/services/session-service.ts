@@ -5,12 +5,19 @@ import {
 } from "@/lib/config";
 
 /**
+ * Gets the ADK app name from environment or defaults
+ */
+function getAdkAppName(): string {
+  return process.env.ADK_APP_NAME || "app";
+}
+
+/**
  * Session creation result with success status and session details
  */
 export interface SessionCreationResult {
   success: boolean;
-  sessionId: string;
-  created: boolean;
+  sessionId?: string;
+  created?: boolean;
   error?: string;
   deploymentType?: string;
 }
@@ -19,10 +26,7 @@ export interface SessionCreationResult {
  * Abstract base class for session management services
  */
 export abstract class SessionService {
-  abstract createSession(
-    userId: string,
-    sessionId: string
-  ): Promise<SessionCreationResult>;
+  abstract createSession(userId: string): Promise<SessionCreationResult>;
 }
 
 /**
@@ -30,10 +34,7 @@ export abstract class SessionService {
  * Handles session creation using Agent Engine's API
  */
 export class AgentEngineSessionService extends SessionService {
-  async createSession(
-    userId: string,
-    sessionId: string
-  ): Promise<SessionCreationResult> {
+  async createSession(userId: string): Promise<SessionCreationResult> {
     const sessionEndpoint = getEndpointForPath("", "query");
 
     const createSessionPayload = {
@@ -67,12 +68,10 @@ export class AgentEngineSessionService extends SessionService {
         }
       }
 
-      console.warn(
-        "Agent Engine session creation failed, using provided sessionId"
-      );
+      console.warn("Agent Engine session creation failed");
       return {
         success: false,
-        sessionId,
+        sessionId: "",
         created: false,
         error: "Agent Engine session creation failed",
         deploymentType: "agent_engine",
@@ -81,7 +80,7 @@ export class AgentEngineSessionService extends SessionService {
       console.warn("Agent Engine session creation error:", sessionError);
       return {
         success: false,
-        sessionId,
+        sessionId: "",
         created: false,
         error: `Agent Engine session creation error: ${
           sessionError instanceof Error
@@ -99,12 +98,10 @@ export class AgentEngineSessionService extends SessionService {
  * Handles session creation using local backend API
  */
 export class LocalBackendSessionService extends SessionService {
-  async createSession(
-    userId: string,
-    sessionId: string
-  ): Promise<SessionCreationResult> {
+  async createSession(userId: string): Promise<SessionCreationResult> {
+    const appName = getAdkAppName();
     const sessionEndpoint = getEndpointForPath(
-      `/apps/app/users/${userId}/sessions/${sessionId}`
+      `/apps/${appName}/users/${userId}/sessions`
     );
 
     try {
@@ -118,9 +115,7 @@ export class LocalBackendSessionService extends SessionService {
         body: JSON.stringify({}),
       });
 
-      const success = sessionResponse.ok || sessionResponse.status === 409;
-
-      if (!success) {
+      if (!sessionResponse.ok) {
         const errorText = await sessionResponse.text();
         console.error(
           "Local backend session creation failed:",
@@ -129,26 +124,33 @@ export class LocalBackendSessionService extends SessionService {
         );
         return {
           success: false,
-          sessionId,
-          created: false,
           error: `Local backend session creation failed: ${sessionResponse.status} ${errorText}`,
           deploymentType: "local_backend",
         };
-      } else {
-        console.log("Local backend session created/verified successfully");
+      }
+
+      const sessionData = await sessionResponse.json();
+      const sessionId = sessionData.id;
+
+      if (!sessionId) {
         return {
-          success: true,
-          sessionId,
-          created: success,
+          success: false,
+          error: "Local backend did not return a session ID",
           deploymentType: "local_backend",
         };
       }
+
+      console.log("Local backend session created successfully:", sessionId);
+      return {
+        success: true,
+        sessionId,
+        created: true,
+        deploymentType: "local_backend",
+      };
     } catch (sessionError) {
       console.error("Local backend session creation error:", sessionError);
       return {
         success: false,
-        sessionId,
-        created: false,
         error: `Local backend session creation error: ${
           sessionError instanceof Error
             ? sessionError.message
@@ -176,9 +178,8 @@ export function getSessionService(): SessionService {
  * This function determines the deployment strategy and delegates to the correct service
  */
 export async function createSessionWithService(
-  userId: string,
-  sessionId: string
+  userId: string
 ): Promise<SessionCreationResult> {
   const service = getSessionService();
-  return await service.createSession(userId, sessionId);
+  return await service.createSession(userId);
 }

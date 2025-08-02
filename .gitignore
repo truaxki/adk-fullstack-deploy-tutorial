@@ -238,3 +238,6 @@ mlruns/
 ehthumbs.db
 Thumbs.db
 *.tmp
+
+# Other
+web/

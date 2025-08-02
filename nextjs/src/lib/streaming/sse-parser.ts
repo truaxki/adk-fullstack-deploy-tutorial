@@ -30,6 +30,9 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
     let functionResponse = undefined;
     let sources = undefined;
 
+    // Extract message ID from backend
+    const messageId = parsed.id;
+
     // Extract text from content.parts (separate thoughts from regular text)
     let thoughtParts: string[] = [];
     if (parsed.content && parsed.content.parts) {
@@ -112,6 +115,7 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
     }
 
     return {
+      messageId,
       textParts,
       thoughtParts,
       agent,
@@ -144,6 +148,7 @@ function handleSSEParsingError(data: string, error: unknown): ParsedSSEData {
   );
 
   return {
+    messageId: undefined,
     textParts: [],
     thoughtParts: [],
     agent: "",

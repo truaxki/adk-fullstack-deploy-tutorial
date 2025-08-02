@@ -99,8 +99,6 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
 
     # Step 2: Set up environment variables for the deployed agent
     env_vars = {}
-    if deployment_config.staging_bucket:
-        env_vars["GOOGLE_CLOUD_STAGING_BUCKET"] = deployment_config.staging_bucket
 
     # Configure worker parallelism
     env_vars["NUM_WORKERS"] = "1"

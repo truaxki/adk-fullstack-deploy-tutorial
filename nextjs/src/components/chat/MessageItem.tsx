@@ -41,10 +41,7 @@ export function MessageItem({
   if (message.type === "human") {
     return (
       <div className="flex items-start justify-end gap-3 max-w-[85%] ml-auto">
-        <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-md border border-blue-500/30">
-          <User className="h-4 w-4 text-white" />
-        </div>
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-4 rounded-2xl rounded-tl-sm shadow-lg border border-blue-500/20">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-4 rounded-2xl rounded-tr-sm shadow-lg border border-blue-500/20">
           <ReactMarkdown
             components={{
               ...mdComponents,
@@ -99,6 +96,9 @@ export function MessageItem({
           >
             {message.content}
           </ReactMarkdown>
+        </div>
+        <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-md border border-blue-500/30">
+          <User className="h-4 w-4 text-white" />
         </div>
       </div>
     );

@@ -7,17 +7,15 @@ import {
 
 /**
  * Server Action to create a new session
+ * Backend will generate and return the session ID
  */
 export async function createSessionAction(
-  userId: string,
-  sessionId: string
+  userId: string
 ): Promise<SessionCreationResult> {
   try {
-    console.log(
-      `📡 Server Action - Creating session for userId: ${userId}, sessionId: ${sessionId}`
-    );
+    console.log(`📡 Server Action - Creating session for userId: ${userId}`);
 
-    const result = await createSessionWithService(userId, sessionId);
+    const result = await createSessionWithService(userId);
 
     console.log(`✅ Server Action - Session creation result:`, result);
 
@@ -27,7 +25,7 @@ export async function createSessionAction(
 
     return {
       success: false,
-      sessionId,
+      sessionId: "",
       created: false,
       error: `Server Action error: ${
         error instanceof Error ? error.message : String(error)

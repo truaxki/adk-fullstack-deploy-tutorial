@@ -5,9 +5,7 @@
  * connection establishment, data streaming, error handling, and cleanup.
  */
 
-import { v4 as uuidv4 } from "uuid";
 import { RefObject } from "react";
-import { Message } from "@/types";
 import {
   SSEConnectionState,
   StreamProcessingCallbacks,
@@ -55,7 +53,8 @@ export class StreamingConnectionManager {
     accumulatedTextRef: RefObject<string>,
     currentAgentRef: RefObject<string>,
     setCurrentAgent: (agent: string) => void,
-    setIsLoading: (loading: boolean) => void
+    setIsLoading: (loading: boolean) => void,
+    aiMessageId: string
   ): Promise<void> {
     this.connectionState = "connecting";
     setIsLoading(true);
@@ -63,17 +62,7 @@ export class StreamingConnectionManager {
     currentAgentRef.current = "";
     this.abortController = new AbortController();
 
-    // Generate AI message ID
-    const aiMessageId = uuidv4();
-
-    // Create initial AI message
-    const initialAiMessage: Message = {
-      type: "ai",
-      content: "",
-      id: aiMessageId,
-      timestamp: new Date(),
-    };
-    callbacks.onMessageUpdate(initialAiMessage);
+    // Don't create fake messages - wait for backend events to provide real message data
 
     try {
       createDebugLog(
@@ -120,18 +109,8 @@ export class StreamingConnectionManager {
         createDebugLog("CONNECTION", "Streaming error", error);
       }
 
-      const errorMessage: Message = {
-        type: "ai",
-        content:
-          (error as Error).name === "AbortError"
-            ? "Request cancelled."
-            : `Sorry, there was an error processing your request: ${
-                error instanceof Error ? error.message : "Unknown error"
-              }`,
-        id: uuidv4(),
-        timestamp: new Date(),
-      };
-      callbacks.onMessageUpdate(errorMessage);
+      // Don't create fake error messages - let the UI handle error states
+      // The error will be propagated up to the calling code
       setIsLoading(false);
     } finally {
       this.abortController = null;
@@ -247,25 +226,14 @@ export class StreamingConnectionManager {
 
             // Process the event immediately for real-time updates
             try {
-              try {
-                processSseEventData(
-                  jsonDataToParse,
-                  aiMessageId,
-                  callbacks,
-                  accumulatedTextRef,
-                  currentAgentRef,
-                  setCurrentAgent
-                );
-              } catch (error) {
-                console.error(
-                  "❌ [SSE ERROR] Failed to process final SSE event:",
-                  error
-                );
-                console.error(
-                  "❌ [SSE ERROR] Problematic JSON:",
-                  jsonDataToParse.substring(0, 500)
-                );
-              }
+              await processSseEventData(
+                jsonDataToParse,
+                aiMessageId,
+                callbacks,
+                accumulatedTextRef,
+                currentAgentRef,
+                setCurrentAgent
+              );
             } catch (error) {
               console.error(
                 "❌ [SSE ERROR] Failed to process SSE event:",
@@ -304,7 +272,7 @@ export class StreamingConnectionManager {
           );
 
           try {
-            processSseEventData(
+            await processSseEventData(
               jsonDataToParse,
               aiMessageId,
               callbacks,

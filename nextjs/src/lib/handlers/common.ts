@@ -50,9 +50,29 @@ export async function parseRequest(request: NextRequest): Promise<{
       return { data: null, validation };
     }
 
-    // Prepare session and user IDs with defaults
-    const sessionId = requestBody.sessionId || `session-${Date.now()}`;
-    const userId = requestBody.userId || "user";
+    // Validate required session and user IDs
+    if (!requestBody.sessionId) {
+      return {
+        data: null,
+        validation: {
+          isValid: false,
+          error: "Session ID is required",
+        },
+      };
+    }
+
+    if (!requestBody.userId) {
+      return {
+        data: null,
+        validation: {
+          isValid: false,
+          error: "User ID is required",
+        },
+      };
+    }
+
+    const sessionId = requestBody.sessionId;
+    const userId = requestBody.userId;
 
     return {
       data: {

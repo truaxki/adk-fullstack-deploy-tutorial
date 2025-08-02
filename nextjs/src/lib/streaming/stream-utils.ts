@@ -5,8 +5,6 @@
  * identification, event title generation, and common streaming helpers.
  */
 
-import { v4 as uuidv4 } from "uuid";
-
 /**
  * Generates user-friendly event titles based on agent names
  *
@@ -34,15 +32,6 @@ export function getEventTitle(agentName: string): string {
     return "✍️ Writing Response";
   }
   return `Processing (${agentName || "AI Agent"})`;
-}
-
-/**
- * Generates a unique message ID for streaming messages
- *
- * @returns Unique identifier string
- */
-export function generateMessageId(): string {
-  return `msg-${uuidv4()}`;
 }
 
 /**
