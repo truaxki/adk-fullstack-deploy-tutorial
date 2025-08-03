@@ -46,12 +46,6 @@ export class AdkSessionService {
       // Agent Engine: Use v1beta1 sessions API
       const endpoint = getEndpointForPath(`/${sessionId}`, "sessions");
 
-      console.log("🔗 [ADK SESSION SERVICE] Agent Engine getSession request:", {
-        endpoint,
-        method: "GET",
-        sessionId,
-      });
-
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
@@ -60,14 +54,6 @@ export class AdkSessionService {
             ...authHeaders,
           },
         });
-
-        console.log(
-          "📡 [ADK SESSION SERVICE] Agent Engine getSession response:",
-          {
-            status: response.status,
-            statusText: response.statusText,
-          }
-        );
 
         if (response.status === 404) {
           return null;
@@ -91,17 +77,6 @@ export class AdkSessionService {
         `/apps/${appName}/users/${userId}/sessions/${sessionId}`
       );
 
-      console.log(
-        "🔗 [ADK SESSION SERVICE] Local Backend getSession request:",
-        {
-          endpoint,
-          method: "GET",
-          userId,
-          sessionId,
-          appName,
-        }
-      );
-
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
@@ -110,14 +85,6 @@ export class AdkSessionService {
             ...authHeaders,
           },
         });
-
-        console.log(
-          "📡 [ADK SESSION SERVICE] Local Backend getSession response:",
-          {
-            status: response.status,
-            statusText: response.statusText,
-          }
-        );
 
         if (response.status === 404) {
           return null;
@@ -165,23 +132,11 @@ export class AdkSessionService {
           },
         });
 
-        console.log(
-          "📡 [ADK SESSION SERVICE] Agent Engine listSessions response:",
-          {
-            status: response.status,
-            statusText: response.statusText,
-          }
-        );
-
         if (!response.ok) {
           throw new Error(`Failed to list sessions: ${response.statusText}`);
         }
 
         const responseData = await response.json();
-        console.log(
-          "🔍 [ADK SESSION SERVICE] Raw response data:",
-          responseData
-        );
 
         // Agent Engine sessions API returns sessions with 'name' field, need to extract ID
         const rawSessions = responseData.sessions || responseData || [];
@@ -210,18 +165,6 @@ export class AdkSessionService {
             };
           }
         );
-
-        console.log("✅ [ADK SESSION SERVICE] Agent Engine success:", {
-          responseType: typeof responseData,
-          isArray: Array.isArray(responseData),
-          hasSessionsProperty: "sessions" in (responseData || {}),
-          sessionsCount: Array.isArray(sessions)
-            ? sessions.length
-            : "not-array",
-          sessionIds: Array.isArray(sessions)
-            ? sessions.map((s) => s.id || "no-id")
-            : "not-array",
-        });
 
         return {
           sessions: Array.isArray(sessions) ? sessions : [],
@@ -302,12 +245,6 @@ export class AdkSessionService {
       // Agent Engine: Use v1beta1 sessions API
       const endpoint = getEndpointForPath(`/${sessionId}/events`, "sessions");
 
-      console.log("🔗 [ADK SESSION SERVICE] Agent Engine listEvents request:", {
-        endpoint,
-        method: "GET",
-        sessionId,
-      });
-
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
@@ -317,45 +254,11 @@ export class AdkSessionService {
           },
         });
 
-        console.log(
-          "📡 [ADK SESSION SERVICE] Agent Engine listEvents response:",
-          {
-            status: response.status,
-            statusText: response.statusText,
-          }
-        );
-
         if (!response.ok) {
           throw new Error(`Failed to list events: ${response.statusText}`);
         }
 
         const responseData = await response.json();
-        console.log(
-          "🔍 [ADK SESSION SERVICE] Agent Engine listEvents raw response:",
-          responseData
-        );
-
-        console.log(
-          "📊 [ADK SESSION SERVICE] Agent Engine listEvents parsed:",
-          {
-            responseType: typeof responseData,
-            isArray: Array.isArray(responseData),
-            hasSessionEventsProperty: "sessionEvents" in (responseData || {}),
-            sessionEventsCount: Array.isArray(responseData?.sessionEvents)
-              ? responseData.sessionEvents.length
-              : "not-array",
-            eventIds: Array.isArray(responseData?.sessionEvents)
-              ? responseData.sessionEvents
-                  .map(
-                    (event: unknown) =>
-                      (event as Record<string, unknown>)?.id ||
-                      (event as Record<string, unknown>)?.name ||
-                      "no-id"
-                  )
-                  .slice(0, 3)
-              : "not-array",
-          }
-        );
 
         // Agent Engine returns events in 'sessionEvents' field, but we need 'events'
         if (
@@ -383,17 +286,6 @@ export class AdkSessionService {
         `/apps/${appName}/users/${userId}/sessions/${sessionId}/events`
       );
 
-      console.log(
-        "🔗 [ADK SESSION SERVICE] Local Backend listEvents request:",
-        {
-          endpoint,
-          method: "GET",
-          userId,
-          sessionId,
-          appName,
-        }
-      );
-
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
@@ -402,14 +294,6 @@ export class AdkSessionService {
             ...authHeaders,
           },
         });
-
-        console.log(
-          "📡 [ADK SESSION SERVICE] Local Backend listEvents response:",
-          {
-            status: response.status,
-            statusText: response.statusText,
-          }
-        );
 
         if (!response.ok) {
           throw new Error(`Failed to list events: ${response.statusText}`);
@@ -434,11 +318,6 @@ export class AdkSessionService {
     sessionId: string
   ): Promise<AdkSessionWithEvents | null> {
     try {
-      console.log("🔍 [ADK SESSION SERVICE] Fetching session and events:", {
-        userId,
-        sessionId,
-      });
-
       if (shouldUseAgentEngine()) {
         // For Agent Engine, get events directly from the /events endpoint
         const eventsResponse = await AdkSessionService.listEvents(
@@ -446,13 +325,6 @@ export class AdkSessionService {
           sessionId
         );
         const events = eventsResponse?.events || [];
-
-        console.log("📦 [ADK SESSION SERVICE] Agent Engine events response:", {
-          sessionId,
-          eventsCount: events.length,
-          hasEvents: !!events,
-          eventsIsArray: Array.isArray(events),
-        });
 
         // Create a minimal session object with the events
         const session: AdkSessionWithEvents = {
@@ -469,35 +341,12 @@ export class AdkSessionService {
         // Local backend - fetch session only (backend includes events in session detail)
         const session = await AdkSessionService.getSession(userId, sessionId);
 
-        console.log(
-          "📦 [ADK SESSION SERVICE] Local backend session response:",
-          {
-            session: session
-              ? {
-                  id: session.id,
-                  app_name: session.app_name,
-                  eventsCount: session.events?.length || 0,
-                  hasEventsProperty: "events" in session,
-                  eventsType: typeof session.events,
-                  eventsIsArray: Array.isArray(session.events),
-                }
-              : null,
-          }
-        );
-
         if (!session) {
-          console.log("❌ [ADK SESSION SERVICE] Session not found");
           return null;
         }
 
         // Use events directly from session detail (backend includes them)
         const events = session.events || [];
-        console.log(
-          "🔄 [ADK SESSION SERVICE] Using events from session detail:",
-          {
-            eventsCount: events.length,
-          }
-        );
 
         return {
           ...session,

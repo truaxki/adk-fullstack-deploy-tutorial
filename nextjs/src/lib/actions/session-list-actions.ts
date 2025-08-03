@@ -26,24 +26,10 @@ export async function fetchActiveSessionsAction(
   userId: string
 ): Promise<SessionListResult> {
   try {
-    console.log(
-      "🔄 [SESSION_LIST_ACTION] Fetching active sessions for user:",
-      userId
-    );
-
     // Fetch sessions from ADK backend (server-side)
     const result = await listUserSessions(userId);
 
-    console.log("📦 [SESSION_LIST_ACTION] Active sessions fetched:", {
-      userId,
-      sessionsCount: result.sessions.length,
-      sessionIds: result.sessionIds,
-    });
-
     // Fetch session details with events for each session in parallel to get real message counts
-    console.log(
-      "🔍 [SESSION_LIST_ACTION] Fetching session details for message counts..."
-    );
 
     const sessionDetailsPromises = result.sessions.map(async (session) => {
       try {
@@ -52,17 +38,6 @@ export async function fetchActiveSessionsAction(
           session.id
         );
         const messageCount = sessionWithEvents?.events?.length || 0;
-
-        console.log(
-          `📊 [SESSION_LIST_ACTION] Session ${session.id} message count calculation:`,
-          {
-            sessionId: session.id,
-            hasSessionWithEvents: !!sessionWithEvents,
-            hasEvents: !!sessionWithEvents?.events,
-            eventsLength: sessionWithEvents?.events?.length,
-            calculatedMessageCount: messageCount,
-          }
-        );
 
         return {
           id: session.id,
@@ -96,17 +71,6 @@ export async function fetchActiveSessionsAction(
     // Wait for all session details to be fetched
     const activeSessions: ActiveSession[] = await Promise.all(
       sessionDetailsPromises
-    );
-
-    console.log(
-      "✅ [SESSION_LIST_ACTION] Active sessions processed with message counts:",
-      {
-        activeSessions: activeSessions.map((s) => ({
-          id: s.id.substring(0, 8),
-          messageCount: s.messageCount,
-          lastUpdate: s.lastUpdateTime?.toISOString(),
-        })),
-      }
     );
 
     return {

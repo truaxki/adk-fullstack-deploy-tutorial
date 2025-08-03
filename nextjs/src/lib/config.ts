@@ -31,19 +31,8 @@ function detectEnvironment(): EndpointConfig["environment"] {
  * Detects the deployment type based on environment variables
  */
 function detectDeploymentType(): EndpointConfig["deploymentType"] {
-  // Debug: Check what environment variables are available
-  console.log("🔍 [DEPLOYMENT TYPE] Environment check:", {
-    hasAgentEngineEndpoint: !!process.env.AGENT_ENGINE_ENDPOINT,
-    agentEngineEndpointValue: process.env.AGENT_ENGINE_ENDPOINT
-      ? "SET"
-      : "NOT_SET",
-  });
-
   // Check for Agent Engine deployment (only use endpoint)
   if (process.env.AGENT_ENGINE_ENDPOINT) {
-    console.log(
-      "✅ [DEPLOYMENT TYPE] Detected as agent_engine via AGENT_ENGINE_ENDPOINT"
-    );
     return "agent_engine";
   }
 
