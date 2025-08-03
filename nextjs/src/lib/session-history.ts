@@ -346,7 +346,12 @@ export class AdkSessionService {
               : "not-array",
             eventIds: Array.isArray(responseData?.events)
               ? responseData.events
-                  .map((event: any) => event.id || event.name || "no-id")
+                  .map(
+                    (event: unknown) =>
+                      (event as Record<string, unknown>)?.id ||
+                      (event as Record<string, unknown>)?.name ||
+                      "no-id"
+                  )
                   .slice(0, 3)
               : "not-array",
           }
