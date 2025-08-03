@@ -53,6 +53,17 @@ export async function fetchActiveSessionsAction(
         );
         const messageCount = sessionWithEvents?.events?.length || 0;
 
+        console.log(
+          `📊 [SESSION_LIST_ACTION] Session ${session.id} message count calculation:`,
+          {
+            sessionId: session.id,
+            hasSessionWithEvents: !!sessionWithEvents,
+            hasEvents: !!sessionWithEvents?.events,
+            eventsLength: sessionWithEvents?.events?.length,
+            calculatedMessageCount: messageCount,
+          }
+        );
+
         return {
           id: session.id,
           userId: session.user_id,

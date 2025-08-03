@@ -329,7 +329,30 @@ export class AdkSessionService {
           throw new Error(`Failed to list events: ${response.statusText}`);
         }
 
-        return response.json();
+        const responseData = await response.json();
+        console.log(
+          "🔍 [ADK SESSION SERVICE] Agent Engine listEvents raw response:",
+          responseData
+        );
+
+        console.log(
+          "📊 [ADK SESSION SERVICE] Agent Engine listEvents parsed:",
+          {
+            responseType: typeof responseData,
+            isArray: Array.isArray(responseData),
+            hasEventsProperty: "events" in (responseData || {}),
+            eventsCount: Array.isArray(responseData?.events)
+              ? responseData.events.length
+              : "not-array",
+            eventIds: Array.isArray(responseData?.events)
+              ? responseData.events
+                  .map((event: any) => event.id || event.name || "no-id")
+                  .slice(0, 3)
+              : "not-array",
+          }
+        );
+
+        return responseData;
       } catch (error) {
         console.error(
           "❌ [ADK SESSION SERVICE] Agent Engine listEvents error:",
@@ -408,6 +431,9 @@ export class AdkSessionService {
               id: session.id,
               app_name: session.app_name,
               eventsCount: session.events?.length || 0,
+              hasEventsProperty: "events" in session,
+              eventsType: typeof session.events,
+              eventsIsArray: Array.isArray(session.events),
             }
           : null,
       });
