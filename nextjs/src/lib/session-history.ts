@@ -178,22 +178,30 @@ export class AdkSessionService {
         }
 
         const responseData = await response.json();
-        console.log("🔍 [ADK SESSION SERVICE] Raw response data:", responseData);
+        console.log(
+          "🔍 [ADK SESSION SERVICE] Raw response data:",
+          responseData
+        );
 
         // Agent Engine sessions API likely returns { sessions: [...] } not just [...]
-        const sessions: AdkSession[] = responseData.sessions || responseData || [];
+        const sessions: AdkSession[] =
+          responseData.sessions || responseData || [];
 
         console.log("✅ [ADK SESSION SERVICE] Agent Engine success:", {
           responseType: typeof responseData,
           isArray: Array.isArray(responseData),
-          hasSessionsProperty: 'sessions' in (responseData || {}),
-          sessionsCount: Array.isArray(sessions) ? sessions.length : 'not-array',
-          sessionIds: Array.isArray(sessions) ? sessions.map((s) => s.id || "no-id") : 'not-array',
+          hasSessionsProperty: "sessions" in (responseData || {}),
+          sessionsCount: Array.isArray(sessions)
+            ? sessions.length
+            : "not-array",
+          sessionIds: Array.isArray(sessions)
+            ? sessions.map((s) => s.id || "no-id")
+            : "not-array",
         });
 
         return {
-          sessions,
-          sessionIds: sessions.map((session) => session.id),
+          sessions: Array.isArray(sessions) ? sessions : [],
+          sessionIds: Array.isArray(sessions) ? sessions.map((session) => session.id) : [],
         };
       } catch (error) {
         console.error(
