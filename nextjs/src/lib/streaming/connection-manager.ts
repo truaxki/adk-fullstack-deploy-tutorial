@@ -234,6 +234,10 @@ export class StreamingConnectionManager {
                 currentAgentRef,
                 setCurrentAgent
               );
+
+              // 🔑 CRITICAL: Force immediate UI update by yielding to event loop
+              // This prevents React from batching updates and ensures real-time streaming
+              await new Promise((resolve) => setTimeout(resolve, 0));
             } catch (error) {
               console.error(
                 "❌ [SSE ERROR] Failed to process SSE event:",
@@ -280,6 +284,10 @@ export class StreamingConnectionManager {
               currentAgentRef,
               setCurrentAgent
             );
+
+            // 🔑 CRITICAL: Force immediate UI update by yielding to event loop
+            // This prevents React from batching updates and ensures real-time streaming
+            await new Promise((resolve) => setTimeout(resolve, 0));
           } catch (error) {
             console.error(
               "❌ [SSE ERROR] Failed to process final SSE event:",
