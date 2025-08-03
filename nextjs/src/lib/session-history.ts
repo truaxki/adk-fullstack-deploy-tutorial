@@ -183,9 +183,33 @@ export class AdkSessionService {
           responseData
         );
 
-        // Agent Engine sessions API likely returns { sessions: [...] } not just [...]
-        const sessions: AdkSession[] =
-          responseData.sessions || responseData || [];
+        // Agent Engine sessions API returns sessions with 'name' field, need to extract ID
+        const rawSessions = responseData.sessions || responseData || [];
+        const sessions: AdkSession[] = rawSessions.map(
+          (session: {
+            name?: string;
+            createTime?: string;
+            updateTime?: string;
+            userId?: string;
+          }) => {
+            // Extract session ID from name field: "projects/.../sessions/SESSION_ID"
+            const sessionId = session.name
+              ? session.name.split("/sessions/")[1]
+              : null;
+
+            return {
+              id: sessionId,
+              app_name: getAdkAppName(), // Add app_name for compatibility
+              user_id: session.userId,
+              state: null,
+              last_update_time: session.updateTime || session.createTime,
+              // Keep original fields for reference
+              name: session.name,
+              createTime: session.createTime,
+              updateTime: session.updateTime,
+            };
+          }
+        );
 
         console.log("✅ [ADK SESSION SERVICE] Agent Engine success:", {
           responseType: typeof responseData,
@@ -201,7 +225,9 @@ export class AdkSessionService {
 
         return {
           sessions: Array.isArray(sessions) ? sessions : [],
-          sessionIds: Array.isArray(sessions) ? sessions.map((session) => session.id) : [],
+          sessionIds: Array.isArray(sessions)
+            ? sessions.map((session) => session.id)
+            : [],
         };
       } catch (error) {
         console.error(
