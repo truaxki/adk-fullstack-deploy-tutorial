@@ -36,16 +36,18 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
     // Extract text from content.parts (separate thoughts from regular text)
     let thoughtParts: string[] = [];
     if (parsed.content && parsed.content.parts) {
-      // Extract regular text (non-thoughts)
+      console.log("[SSE DEBUG] Processing content.parts for text extraction");
+      
+      // For Agent Engine, include ALL text parts (thoughts and non-thoughts) in main display
+      // since Agent Engine often marks substantial response content as "thoughts"
       textParts = parsed.content.parts
-        .filter(
-          (part: { text?: string; thought?: boolean }) =>
-            part.text && !part.thought
-        )
+        .filter((part: { text?: string }) => part.text)
         .map((part: { text?: string }) => part.text!)
         .filter((text): text is string => text !== undefined);
 
-      // Extract thoughts separately
+      console.log("[SSE DEBUG] All textParts (including thoughts):", textParts);
+
+      // Extract thoughts separately for timeline activities
       thoughtParts = parsed.content.parts
         .filter(
           (part: { text?: string; thought?: boolean }) =>
