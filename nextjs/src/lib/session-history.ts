@@ -427,40 +427,63 @@ export class AdkSessionService {
         sessionId,
       });
 
-      // Fetch session only (backend includes events in session detail)
-      const session = await AdkSessionService.getSession(userId, sessionId);
+      if (shouldUseAgentEngine()) {
+        // For Agent Engine, get events directly from the /events endpoint
+        const events = await AdkSessionService.listEvents(userId, sessionId);
+        
+        console.log("📦 [ADK SESSION SERVICE] Agent Engine events response:", {
+          sessionId,
+          eventsCount: events?.length || 0,
+          hasEvents: !!events,
+          eventsIsArray: Array.isArray(events),
+        });
 
-      console.log("📦 [ADK SESSION SERVICE] Session response:", {
-        session: session
-          ? {
-              id: session.id,
-              app_name: session.app_name,
-              eventsCount: session.events?.length || 0,
-              hasEventsProperty: "events" in session,
-              eventsType: typeof session.events,
-              eventsIsArray: Array.isArray(session.events),
-            }
-          : null,
-      });
+        // Create a minimal session object with the events
+        const session: AdkSessionWithEvents = {
+          id: sessionId,
+          user_id: userId,
+          app_name: process.env.ADK_APP_NAME || "app",
+          created_at: new Date().toISOString(),
+          events: events || [],
+        };
 
-      if (!session) {
-        console.log("❌ [ADK SESSION SERVICE] Session not found");
-        return null;
-      }
+        return session;
+      } else {
+        // Local backend - fetch session only (backend includes events in session detail)
+        const session = await AdkSessionService.getSession(userId, sessionId);
 
-      // Use events directly from session detail (backend includes them)
-      const events = session.events || [];
-      console.log(
-        "🔄 [ADK SESSION SERVICE] Using events from session detail:",
-        {
-          eventsCount: events.length,
+        console.log("📦 [ADK SESSION SERVICE] Local backend session response:", {
+          session: session
+            ? {
+                id: session.id,
+                app_name: session.app_name,
+                eventsCount: session.events?.length || 0,
+                hasEventsProperty: "events" in session,
+                eventsType: typeof session.events,
+                eventsIsArray: Array.isArray(session.events),
+              }
+            : null,
+        });
+
+        if (!session) {
+          console.log("❌ [ADK SESSION SERVICE] Session not found");
+          return null;
         }
-      );
 
-      return {
-        ...session,
-        events,
-      };
+        // Use events directly from session detail (backend includes them)
+        const events = session.events || [];
+        console.log(
+          "🔄 [ADK SESSION SERVICE] Using events from session detail:",
+          {
+            eventsCount: events.length,
+          }
+        );
+
+        return {
+          ...session,
+          events,
+        };
+      }
     } catch (error) {
       console.error(
         "❌ [ADK SESSION SERVICE] Error fetching session with events:",
