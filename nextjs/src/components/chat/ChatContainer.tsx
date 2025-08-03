@@ -10,7 +10,7 @@ import { ChatInput } from "./ChatInput";
  * Handles only UI structure and layout, no business logic
  * Uses context for all state management
  */
-export function ChatLayout(): React.JSX.Element {
+export function ChatContainer(): React.JSX.Element {
   return (
     <div className="h-screen flex flex-col bg-slate-900 relative">
       <BackendHealthChecker>
