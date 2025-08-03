@@ -192,7 +192,26 @@ export function shouldUseAgentEngine(): boolean {
 /**
  * Agent Engine endpoint types
  */
-export type AgentEngineEndpointType = "query" | "streamQuery";
+export type AgentEngineEndpointType = "query" | "streamQuery" | "sessions";
+
+/**
+ * Gets the Agent Engine sessions API base URL (v1beta1)
+ */
+function getAgentEngineSessionsUrl(): string | undefined {
+  if (!endpointConfig.agentEngineUrl) return undefined;
+
+  // Sessions API uses v1beta1, construct from the base URL parts
+  const urlParts = endpointConfig.agentEngineUrl.match(
+    /^(https:\/\/[^\/]+)\/v1\/(projects\/[^\/]+\/locations\/[^\/]+\/reasoningEngines\/[^\/]+)/
+  );
+
+  if (urlParts) {
+    const [, baseUrl, projectPath] = urlParts;
+    return `${baseUrl}/v1beta1/${projectPath}`;
+  }
+
+  return undefined;
+}
 
 /**
  * Gets the appropriate endpoint for a given API path and operation type
@@ -205,8 +224,16 @@ export function getEndpointForPath(
     // For Agent Engine, return the appropriate endpoint based on operation type
     if (endpointType === "streamQuery") {
       return `${endpointConfig.agentEngineUrl}:streamQuery`;
-    } else {
+    } else if (endpointType === "query") {
       return `${endpointConfig.agentEngineUrl}:query`;
+    } else if (endpointType === "sessions") {
+      const sessionsUrl = getAgentEngineSessionsUrl();
+      if (!sessionsUrl) {
+        throw new Error(
+          "Could not construct sessions API URL from AGENT_ENGINE_ENDPOINT"
+        );
+      }
+      return `${sessionsUrl}/sessions${path}`;
     }
   }
 
