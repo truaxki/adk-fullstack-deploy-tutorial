@@ -43,35 +43,25 @@ export class AdkSessionService {
     const appName = getAdkAppName();
 
     if (shouldUseAgentEngine()) {
-      // Agent Engine: POST with JSON payload to :query endpoint
-      const endpoint = getEndpointForPath("", "query");
-      const payload = {
-        class_method: "get_session",
-        input: {
-          user_id: userId,
-          session_id: sessionId,
-          app_name: appName,
-        },
-      };
+      // Agent Engine: Use same REST pattern as web project
+      const endpoint = getEndpointForPath(
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}`
+      );
 
       console.log("🔗 [ADK SESSION SERVICE] Agent Engine getSession request:", {
         endpoint,
-        method: "POST",
+        method: "GET",
         userId,
         sessionId,
-        appName,
-        payload: JSON.stringify(payload, null, 2),
       });
 
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
-          method: "POST",
+          method: "GET",
           headers: {
             ...authHeaders,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload),
         });
 
         console.log(
@@ -79,7 +69,6 @@ export class AdkSessionService {
           {
             status: response.status,
             statusText: response.statusText,
-            contentType: response.headers.get("content-type"),
           }
         );
 
@@ -91,8 +80,7 @@ export class AdkSessionService {
           throw new Error(`Failed to get session: ${response.statusText}`);
         }
 
-        const result = await response.json();
-        return result.output || null;
+        return response.json();
       } catch (error) {
         console.error(
           "❌ [ADK SESSION SERVICE] Agent Engine getSession error:",
@@ -160,66 +148,42 @@ export class AdkSessionService {
     const appName = getAdkAppName();
 
     if (shouldUseAgentEngine()) {
-      // Agent Engine: POST with JSON payload to :query endpoint
-      const endpoint = getEndpointForPath("", "query");
-      const payload = {
-        class_method: "list_sessions",
-        input: {
-          user_id: userId,
-          app_name: appName,
-        },
-      };
+      // Agent Engine: Use same REST pattern as web project
+      const endpoint = getEndpointForPath(
+        `/apps/${appName}/users/${userId}/sessions`
+      );
 
       console.log(
         "🔗 [ADK SESSION SERVICE] Agent Engine listSessions request:",
         {
           endpoint,
-          method: "POST",
+          method: "GET",
           userId,
-          appName,
-          payload: JSON.stringify(payload, null, 2),
         }
       );
 
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
-          method: "POST",
+          method: "GET",
           headers: {
             ...authHeaders,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload),
         });
 
-        console.log("📡 [ADK SESSION SERVICE] Agent Engine response:", {
-          status: response.status,
-          statusText: response.statusText,
-          contentType: response.headers.get("content-type"),
-        });
+        console.log(
+          "📡 [ADK SESSION SERVICE] Agent Engine listSessions response:",
+          {
+            status: response.status,
+            statusText: response.statusText,
+          }
+        );
 
         if (!response.ok) {
-          let errorDetails = `${response.status} ${response.statusText}`;
-          try {
-            const errorBody = await response.text();
-            console.error(
-              "❌ [ADK SESSION SERVICE] Error response body:",
-              errorBody
-            );
-            if (errorBody) {
-              errorDetails += `. Response: ${errorBody}`;
-            }
-          } catch (bodyError) {
-            console.error(
-              "❌ [ADK SESSION SERVICE] Could not read error response body:",
-              bodyError
-            );
-          }
-          throw new Error(`Failed to list sessions: ${errorDetails}`);
+          throw new Error(`Failed to list sessions: ${response.statusText}`);
         }
 
-        const result = await response.json();
-        const sessions: AdkSession[] = result.output || [];
+        const sessions: AdkSession[] = await response.json();
 
         console.log("✅ [ADK SESSION SERVICE] Agent Engine success:", {
           sessionsCount: sessions.length,
@@ -231,7 +195,10 @@ export class AdkSessionService {
           sessionIds: sessions.map((session) => session.id),
         };
       } catch (error) {
-        console.error("❌ [ADK SESSION SERVICE] Agent Engine error:", error);
+        console.error(
+          "❌ [ADK SESSION SERVICE] Agent Engine listSessions error:",
+          error
+        );
         throw error;
       }
     } else {
@@ -266,23 +233,7 @@ export class AdkSessionService {
         });
 
         if (!response.ok) {
-          let errorDetails = `${response.status} ${response.statusText}`;
-          try {
-            const errorBody = await response.text();
-            console.error(
-              "❌ [ADK SESSION SERVICE] Error response body:",
-              errorBody
-            );
-            if (errorBody) {
-              errorDetails += `. Response: ${errorBody}`;
-            }
-          } catch (bodyError) {
-            console.error(
-              "❌ [ADK SESSION SERVICE] Could not read error response body:",
-              bodyError
-            );
-          }
-          throw new Error(`Failed to list sessions: ${errorDetails}`);
+          throw new Error(`Failed to list sessions: ${response.statusText}`);
         }
 
         const sessions: AdkSession[] = await response.json();
@@ -313,35 +264,25 @@ export class AdkSessionService {
     const appName = getAdkAppName();
 
     if (shouldUseAgentEngine()) {
-      // Agent Engine: POST with JSON payload to :query endpoint
-      const endpoint = getEndpointForPath("", "query");
-      const payload = {
-        class_method: "list_events",
-        input: {
-          user_id: userId,
-          session_id: sessionId,
-          app_name: appName,
-        },
-      };
+      // Agent Engine: Use same REST pattern as web project
+      const endpoint = getEndpointForPath(
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/events`
+      );
 
       console.log("🔗 [ADK SESSION SERVICE] Agent Engine listEvents request:", {
         endpoint,
-        method: "POST",
+        method: "GET",
         userId,
         sessionId,
-        appName,
-        payload: JSON.stringify(payload, null, 2),
       });
 
       try {
         const authHeaders = await getAuthHeaders();
         const response = await fetch(endpoint, {
-          method: "POST",
+          method: "GET",
           headers: {
             ...authHeaders,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload),
         });
 
         console.log(
@@ -349,7 +290,6 @@ export class AdkSessionService {
           {
             status: response.status,
             statusText: response.statusText,
-            contentType: response.headers.get("content-type"),
           }
         );
 
@@ -357,8 +297,7 @@ export class AdkSessionService {
           throw new Error(`Failed to list events: ${response.statusText}`);
         }
 
-        const result = await response.json();
-        return result.output || [];
+        return response.json();
       } catch (error) {
         console.error(
           "❌ [ADK SESSION SERVICE] Agent Engine listEvents error:",
