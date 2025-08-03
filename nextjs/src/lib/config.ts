@@ -31,8 +31,19 @@ function detectEnvironment(): EndpointConfig["environment"] {
  * Detects the deployment type based on environment variables
  */
 function detectDeploymentType(): EndpointConfig["deploymentType"] {
-  // Check for Agent Engine deployment
-  if (process.env.AGENT_ENGINE_ENDPOINT || process.env.REASONING_ENGINE_ID) {
+  // Debug: Check what environment variables are available
+  console.log("🔍 [DEPLOYMENT TYPE] Environment check:", {
+    hasAgentEngineEndpoint: !!process.env.AGENT_ENGINE_ENDPOINT,
+    agentEngineEndpointValue: process.env.AGENT_ENGINE_ENDPOINT
+      ? "SET"
+      : "NOT_SET",
+  });
+
+  // Check for Agent Engine deployment (only use endpoint)
+  if (process.env.AGENT_ENGINE_ENDPOINT) {
+    console.log(
+      "✅ [DEPLOYMENT TYPE] Detected as agent_engine via AGENT_ENGINE_ENDPOINT"
+    );
     return "agent_engine";
   }
 
@@ -53,19 +64,13 @@ function getBackendUrl(): string {
 
   switch (deploymentType) {
     case "agent_engine":
-      // Agent Engine endpoint - use the specific endpoint if provided
+      // Agent Engine endpoint - only use the specific endpoint
       if (process.env.AGENT_ENGINE_ENDPOINT) {
         return process.env.AGENT_ENGINE_ENDPOINT;
       }
-      // Fallback to constructed Agent Engine URL
-      const project = process.env.GOOGLE_CLOUD_PROJECT;
-      const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
-      const reasoningEngineId = process.env.REASONING_ENGINE_ID;
-
-      if (project && reasoningEngineId) {
-        return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/reasoningEngines/${reasoningEngineId}`;
-      }
-      break;
+      throw new Error(
+        "AGENT_ENGINE_ENDPOINT environment variable is required for Agent Engine deployment"
+      );
 
     case "cloud_run":
       // Cloud Run deployment - use the service URL
@@ -88,15 +93,8 @@ function getBackendUrl(): string {
  * Gets the Agent Engine URL for direct Agent Engine API calls
  */
 function getAgentEngineUrl(): string | undefined {
-  const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
-  const reasoningEngineId = process.env.REASONING_ENGINE_ID;
-
-  if (project && reasoningEngineId) {
-    return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/reasoningEngines/${reasoningEngineId}`;
-  }
-
-  return undefined;
+  // Only use the direct endpoint, no more individual env var construction
+  return process.env.AGENT_ENGINE_ENDPOINT || undefined;
 }
 
 /**
