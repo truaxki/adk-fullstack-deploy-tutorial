@@ -340,12 +340,12 @@ export class AdkSessionService {
           {
             responseType: typeof responseData,
             isArray: Array.isArray(responseData),
-            hasEventsProperty: "events" in (responseData || {}),
-            eventsCount: Array.isArray(responseData?.events)
-              ? responseData.events.length
+            hasSessionEventsProperty: "sessionEvents" in (responseData || {}),
+            sessionEventsCount: Array.isArray(responseData?.sessionEvents)
+              ? responseData.sessionEvents.length
               : "not-array",
-            eventIds: Array.isArray(responseData?.events)
-              ? responseData.events
+            eventIds: Array.isArray(responseData?.sessionEvents)
+              ? responseData.sessionEvents
                   .map(
                     (event: unknown) =>
                       (event as Record<string, unknown>)?.id ||
@@ -356,6 +356,18 @@ export class AdkSessionService {
               : "not-array",
           }
         );
+
+        // Agent Engine returns events in 'sessionEvents' field, but we need 'events'
+        if (
+          responseData &&
+          responseData.sessionEvents &&
+          Array.isArray(responseData.sessionEvents)
+        ) {
+          return {
+            events: responseData.sessionEvents,
+            nextPageToken: responseData.nextPageToken,
+          };
+        }
 
         return responseData;
       } catch (error) {
@@ -427,11 +439,14 @@ export class AdkSessionService {
         sessionId,
       });
 
-            if (shouldUseAgentEngine()) {
+      if (shouldUseAgentEngine()) {
         // For Agent Engine, get events directly from the /events endpoint
-        const eventsResponse = await AdkSessionService.listEvents(userId, sessionId);
+        const eventsResponse = await AdkSessionService.listEvents(
+          userId,
+          sessionId
+        );
         const events = eventsResponse?.events || [];
-        
+
         console.log("📦 [ADK SESSION SERVICE] Agent Engine events response:", {
           sessionId,
           eventsCount: events.length,
