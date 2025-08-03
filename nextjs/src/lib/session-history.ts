@@ -427,13 +427,14 @@ export class AdkSessionService {
         sessionId,
       });
 
-      if (shouldUseAgentEngine()) {
+            if (shouldUseAgentEngine()) {
         // For Agent Engine, get events directly from the /events endpoint
-        const events = await AdkSessionService.listEvents(userId, sessionId);
+        const eventsResponse = await AdkSessionService.listEvents(userId, sessionId);
+        const events = eventsResponse?.events || [];
         
         console.log("📦 [ADK SESSION SERVICE] Agent Engine events response:", {
           sessionId,
-          eventsCount: events?.length || 0,
+          eventsCount: events.length,
           hasEvents: !!events,
           eventsIsArray: Array.isArray(events),
         });
@@ -443,8 +444,9 @@ export class AdkSessionService {
           id: sessionId,
           user_id: userId,
           app_name: process.env.ADK_APP_NAME || "app",
-          created_at: new Date().toISOString(),
-          events: events || [],
+          state: null,
+          last_update_time: new Date().toISOString(),
+          events: events,
         };
 
         return session;
@@ -452,18 +454,21 @@ export class AdkSessionService {
         // Local backend - fetch session only (backend includes events in session detail)
         const session = await AdkSessionService.getSession(userId, sessionId);
 
-        console.log("📦 [ADK SESSION SERVICE] Local backend session response:", {
-          session: session
-            ? {
-                id: session.id,
-                app_name: session.app_name,
-                eventsCount: session.events?.length || 0,
-                hasEventsProperty: "events" in session,
-                eventsType: typeof session.events,
-                eventsIsArray: Array.isArray(session.events),
-              }
-            : null,
-        });
+        console.log(
+          "📦 [ADK SESSION SERVICE] Local backend session response:",
+          {
+            session: session
+              ? {
+                  id: session.id,
+                  app_name: session.app_name,
+                  eventsCount: session.events?.length || 0,
+                  hasEventsProperty: "events" in session,
+                  eventsType: typeof session.events,
+                  eventsIsArray: Array.isArray(session.events),
+                }
+              : null,
+          }
+        );
 
         if (!session) {
           console.log("❌ [ADK SESSION SERVICE] Session not found");
