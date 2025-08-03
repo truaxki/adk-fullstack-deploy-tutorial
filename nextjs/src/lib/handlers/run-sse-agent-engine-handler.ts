@@ -173,7 +173,7 @@ class JSONFragmentProcessor {
    *
    * IMPROVED: Now outputs proper SSE format for unified processing
    */
-  private emitCompletePart(part: AgentEngineContentPart): void {
+  private async emitCompletePart(part: AgentEngineContentPart): Promise<void> {
     console.log(
       `📤 [JSON PROCESSOR] Emitting complete part as SSE format (thought: ${part.thought}):`,
       part.text?.substring(0, 200) +
@@ -190,6 +190,16 @@ class JSONFragmentProcessor {
     // Convert to proper SSE format: data: {...}\n\n
     const sseEvent = `data: ${JSON.stringify(sseData)}\n\n`;
     this.controller.enqueue(Buffer.from(sseEvent));
+
+    // 🔥 CRITICAL: Force immediate flush to prevent buffering
+    // This ensures each SSE event is sent immediately, not batched
+    try {
+      // In streaming contexts, we need to yield to the event loop to ensure data is flushed
+      await new Promise((resolve) => setImmediate(resolve));
+    } catch (error) {
+      // Fallback if setImmediate isn't available
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
 
     console.log(
       `✅ [JSON PROCESSOR] Successfully emitted complete part as SSE format`
