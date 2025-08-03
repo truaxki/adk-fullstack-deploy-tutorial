@@ -288,7 +288,7 @@ export function ChatProvider({
         const userMessage: Message = {
           type: "human",
           content: query,
-          id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
           timestamp: new Date(),
         };
         addMessage(userMessage);

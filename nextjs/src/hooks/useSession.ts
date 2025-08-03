@@ -61,6 +61,11 @@ export function useSession(): UseSessionReturn {
 
         if (sessionResult.success) {
           // Use the session ID returned by the backend
+          if (!sessionResult.sessionId) {
+            throw new Error(
+              "Session creation succeeded but no session ID was returned"
+            );
+          }
           actualSessionId = sessionResult.sessionId;
           console.log(
             `✅ Session created via Server Action: ${actualSessionId}`
