@@ -122,7 +122,45 @@ export function ChatProvider({
       setMessageEvents((prev) => {
         const newMap = new Map(prev);
         const existingEvents = newMap.get(messageId) || [];
-        newMap.set(messageId, [...existingEvents, event]);
+
+        // Deduplicate thinking activities by exact title to prevent duplicates
+        if (event.title.startsWith("🤔")) {
+          const existingThinkingIndex = existingEvents.findIndex(
+            (existingEvent) => existingEvent.title === event.title
+          );
+
+          if (existingThinkingIndex >= 0) {
+            // Update existing thinking activity with new content
+            const updatedEvents = [...existingEvents];
+            const existingEvent = updatedEvents[existingThinkingIndex];
+            const existingData =
+              existingEvent.data && typeof existingEvent.data === "object"
+                ? existingEvent.data
+                : {};
+            const newContent =
+              event.data &&
+              typeof event.data === "object" &&
+              "content" in event.data
+                ? String(event.data.content)
+                : "";
+
+            updatedEvents[existingThinkingIndex] = {
+              ...existingEvent,
+              data: {
+                ...existingData,
+                content: newContent,
+              },
+            };
+            newMap.set(messageId, updatedEvents);
+          } else {
+            // Add new thinking activity (each distinct thought title)
+            newMap.set(messageId, [...existingEvents, event]);
+          }
+        } else {
+          // For non-thinking activities, add normally (no deduplication needed)
+          newMap.set(messageId, [...existingEvents, event]);
+        }
+
         return newMap;
       });
     },

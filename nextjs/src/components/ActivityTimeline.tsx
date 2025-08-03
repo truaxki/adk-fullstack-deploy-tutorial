@@ -106,9 +106,11 @@ export function ActivityTimeline({
     // Handle structured data types
     if (typeof data === "object" && data !== null && "type" in data) {
       const typedData = data as { type: string };
-      if (typedData.type === "sources") {
+      // Thinking and sources should use markdown rendering
+      if (typedData.type === "thinking" || typedData.type === "sources") {
         return false; // Let ReactMarkdown handle this
       }
+      // Only function calls and responses should use JSON rendering
       return (
         typedData.type === "functionCall" ||
         typedData.type === "functionResponse"
@@ -140,7 +142,8 @@ export function ActivityTimeline({
       return <Activity className="h-4 w-4" />;
     if (title.includes("Writing") || title.includes("Report"))
       return <Pen className="h-4 w-4" />;
-    if (title.includes("Thinking")) return <Brain className="h-4 w-4" />;
+    if (title.includes("Thinking") || title.startsWith("🤔"))
+      return <Brain className="h-4 w-4" />;
     return <Info className="h-4 w-4" />;
   };
 
@@ -156,7 +159,8 @@ export function ActivityTimeline({
       return "text-orange-400";
     if (title.includes("Writing") || title.includes("Report"))
       return "text-pink-400";
-    if (title.includes("Thinking")) return "text-cyan-400";
+    if (title.includes("Thinking") || title.startsWith("🤔"))
+      return "text-cyan-400";
     return "text-neutral-400";
   };
 

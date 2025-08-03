@@ -197,7 +197,7 @@ function processFunctionResponse(
 }
 
 /**
- * Processes AI thought parts
+ * Processes AI thought parts - creates separate activities for each distinct thought
  *
  * @param thoughtParts - Array of thought strings from parsed SSE
  * @param agent - Current agent name
@@ -216,10 +216,65 @@ function processThoughts(
     { thoughts: thoughtParts }
   );
 
-  onEventUpdate(aiMessageId, {
-    title: "🤔 AI Thinking",
-    data: { type: "thinking", content: thoughtParts.join(" ") },
+  // Join all thought parts first (they come as separate parts from SSE)
+  const combinedThoughts = thoughtParts.join(" ");
+
+  createDebugLog("SSE HANDLER", "Combined thoughts before splitting:", {
+    combinedThoughts,
+    length: combinedThoughts.length,
   });
+
+  // Split by double newlines or by ** headers to get individual thought sections
+  const thoughtSections = splitThoughtsIntoSections(combinedThoughts);
+
+  createDebugLog("SSE HANDLER", "Thought sections after splitting:", {
+    sectionsCount: thoughtSections.length,
+    sections: thoughtSections,
+  });
+
+  thoughtSections.forEach((section, index) => {
+    // Always use generic "AI Thinking" title, put specific content inside
+    const title = "🤔 AI Thinking";
+
+    onEventUpdate(aiMessageId, {
+      title: title,
+      data: { type: "thinking", content: section.trim() },
+    });
+
+    createDebugLog(
+      "SSE HANDLER",
+      `Created thought activity ${index + 1}/${thoughtSections.length}:`,
+      {
+        title,
+        contentLength: section.length,
+        preview: section.substring(0, 100) + "...",
+      }
+    );
+  });
+}
+
+/**
+ * Splits combined thought text into individual thought sections
+ */
+function splitThoughtsIntoSections(combinedThoughts: string): string[] {
+  // Split by double newlines followed by ** (start of new thought section)
+  // This preserves complete thought sections including their headers and content
+  const sections = combinedThoughts.split(/\n\n(?=\*\*)/);
+
+  return sections
+    .map((section) => section.trim())
+    .filter((section) => section.length > 0 && section.includes("**"));
+}
+
+/**
+ * Extracts the title from a thought section (the bold header)
+ * Currently unused but kept for potential future use
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function extractThoughtTitle(thoughtSection: string): string {
+  // Look for **Title** pattern at the start of the section
+  const match = thoughtSection.match(/^\*\*([^*]+?)\*\*/);
+  return match ? `🤔 ${match[1].trim()}` : "🤔 AI Thinking";
 }
 
 /**

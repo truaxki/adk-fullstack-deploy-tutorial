@@ -22,7 +22,7 @@ import type { Message as BaseMessage } from "@/types";
  */
 interface AdkEventPart {
   video_metadata?: unknown;
-  thought?: unknown;
+  thought?: boolean; // Changed from unknown to boolean to match real-time streaming
   inline_data?: unknown;
   file_data?: unknown;
   thought_signature?: unknown;
@@ -34,8 +34,8 @@ interface AdkEventPart {
 }
 
 /**
- * Extracts text content from an ADK event
- * Handles complex nested parts structure with multiple potential fields
+ * Extracts NON-THOUGHT text content from an ADK event (matches real-time streaming logic)
+ * Filters out thought parts to avoid mixing thoughts with regular message content
  */
 function extractTextFromAdkEvent(event: AdkEvent): string {
   console.log(`🔍 [EXTRACT_TEXT] Processing event ${event.id}:`, {
@@ -53,20 +53,21 @@ function extractTextFromAdkEvent(event: AdkEvent): string {
       });
 
       if (parsed.parts && Array.isArray(parsed.parts)) {
+        // MATCH REAL-TIME STREAMING: Filter out thought parts (part.thought === true)
         const texts = parsed.parts
-          .map((part: AdkEventPart) => {
-            // Handle complex part structure with many fields
-            if (part && typeof part === "object") {
-              return part.text || "";
-            }
-            return "";
+          .filter((part: AdkEventPart) => {
+            // Only include parts with text that are NOT thoughts
+            return (
+              part && typeof part === "object" && part.text && !part.thought
+            );
           })
+          .map((part: AdkEventPart) => part.text!)
           .filter((text: string) => text && text.trim().length > 0);
 
         const result = texts.join(" ");
-        console.log(`✅ [EXTRACT_TEXT] Extracted from JSON:`, {
+        console.log(`✅ [EXTRACT_TEXT] Extracted NON-THOUGHT text from JSON:`, {
           partsCount: parsed.parts.length,
-          textParts: texts.length,
+          nonThoughtTextParts: texts.length,
           resultLength: result.length,
         });
         return result;
@@ -80,20 +81,19 @@ function extractTextFromAdkEvent(event: AdkEvent): string {
 
   // Handle case where content is already an object with parts
   if (event.content?.parts && Array.isArray(event.content.parts)) {
+    // MATCH REAL-TIME STREAMING: Filter out thought parts (part.thought === true)
     const texts = event.content.parts
-      .map((part: AdkEventPart) => {
-        // Handle complex part structure with many fields
-        if (part && typeof part === "object") {
-          return part.text || "";
-        }
-        return "";
+      .filter((part: AdkEventPart) => {
+        // Only include parts with text that are NOT thoughts
+        return part && typeof part === "object" && part.text && !part.thought;
       })
+      .map((part: AdkEventPart) => part.text!)
       .filter((text: string) => text && text.trim().length > 0);
 
     const result = texts.join(" ");
-    console.log(`✅ [EXTRACT_TEXT] Extracted from object:`, {
+    console.log(`✅ [EXTRACT_TEXT] Extracted NON-THOUGHT text from object:`, {
       partsCount: event.content.parts.length,
-      textParts: texts.length,
+      nonThoughtTextParts: texts.length,
       resultLength: result.length,
     });
     return result;
@@ -107,8 +107,168 @@ function extractTextFromAdkEvent(event: AdkEvent): string {
 }
 
 /**
+ * Extracts THOUGHT text content from an ADK event (matches real-time streaming logic)
+ * Only returns text from parts where thought === true
+ */
+function extractThoughtsFromAdkEvent(event: AdkEvent): string[] {
+  console.log(`🧠 [EXTRACT_THOUGHTS] Processing event ${event.id}:`, {
+    contentType: typeof event.content,
+    hasContent: !!event.content,
+  });
+
+  // Handle case where content is a JSON string
+  if (typeof event.content === "string") {
+    try {
+      const parsed = JSON.parse(event.content);
+      if (parsed.parts && Array.isArray(parsed.parts)) {
+        // MATCH REAL-TIME STREAMING: Extract only thought parts (part.thought === true)
+        const thoughtTexts = parsed.parts
+          .filter((part: AdkEventPart) => {
+            // Only include parts with text that ARE thoughts
+            return (
+              part && typeof part === "object" && part.text && part.thought
+            );
+          })
+          .map((part: AdkEventPart) => part.text!)
+          .filter((text: string) => text && text.trim().length > 0);
+
+        console.log(`✅ [EXTRACT_THOUGHTS] Extracted thoughts from JSON:`, {
+          partsCount: parsed.parts.length,
+          thoughtParts: thoughtTexts.length,
+          thoughts: thoughtTexts,
+        });
+        return thoughtTexts;
+      }
+    } catch (error) {
+      console.warn(`⚠️ [EXTRACT_THOUGHTS] JSON parsing failed:`, error);
+      return [];
+    }
+  }
+
+  // Handle case where content is already an object with parts
+  if (event.content?.parts && Array.isArray(event.content.parts)) {
+    // MATCH REAL-TIME STREAMING: Extract only thought parts (part.thought === true)
+    const thoughtTexts = event.content.parts
+      .filter((part: AdkEventPart) => {
+        // Only include parts with text that ARE thoughts
+        return part && typeof part === "object" && part.text && part.thought;
+      })
+      .map((part: AdkEventPart) => part.text!)
+      .filter((text: string) => text && text.trim().length > 0);
+
+    console.log(`✅ [EXTRACT_THOUGHTS] Extracted thoughts from object:`, {
+      partsCount: event.content.parts.length,
+      thoughtParts: thoughtTexts.length,
+      thoughts: thoughtTexts,
+    });
+    return thoughtTexts;
+  }
+
+  // Fallback to empty array if no thought content
+  console.log(
+    `⚠️ [EXTRACT_THOUGHTS] No thought content found for event ${event.id}`
+  );
+  return [];
+}
+
+/**
+ * Splits combined thought text into individual thought sections
+ */
+function splitThoughtsIntoSections(combinedThoughts: string): string[] {
+  // Split by double newlines followed by ** (start of new thought section)
+  // This preserves complete thought sections including their headers and content
+  const sections = combinedThoughts.split(/\n\n(?=\*\*)/);
+
+  return sections
+    .map((section) => section.trim())
+    .filter((section) => section.length > 0 && section.includes("**"));
+}
+
+/**
+ * Extracts the title from a thought section (the bold header)
+ * Currently unused but kept for potential future use
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function extractThoughtTitle(thoughtSection: string): string {
+  // Look for **Title** pattern at the start of the section
+  const match = thoughtSection.match(/^\*\*([^*]+?)\*\*/);
+  return match ? `🤔 ${match[1].trim()}` : "🤔 AI Thinking";
+}
+
+/**
+ * Checks if an ADK event has meaningful actions/metadata worth showing as a timeline activity
+ */
+function hasMeaningfulActions(event: AdkEvent): boolean {
+  // Check if actions exist and have meaningful content
+  if (event.actions && typeof event.actions === "object") {
+    // Treat actions as a flexible Record to handle all possible properties
+    const actions = event.actions as Record<string, unknown>;
+
+    // Check each property in actions for meaningful content
+    for (const [key, value] of Object.entries(actions)) {
+      if (value && typeof value === "object") {
+        const objectValue = value as Record<string, unknown>;
+        const hasNonEmptyObject = Object.keys(objectValue).length > 0;
+
+        // For nested objects, check if they have meaningful content
+        if (hasNonEmptyObject) {
+          // Check if any nested values are non-empty
+          const hasNonEmptyValues = Object.values(objectValue).some(
+            (nestedValue) => {
+              if (nestedValue === null || nestedValue === undefined)
+                return false;
+              if (typeof nestedValue === "object") {
+                return (
+                  Object.keys(nestedValue as Record<string, unknown>).length > 0
+                );
+              }
+              if (typeof nestedValue === "string") {
+                return nestedValue.trim().length > 0;
+              }
+              return true; // Non-empty primitive values
+            }
+          );
+
+          if (hasNonEmptyValues) {
+            console.log(
+              `✅ [MEANINGFUL_ACTIONS] Found meaningful content in actions.${key}:`,
+              objectValue
+            );
+            return true;
+          }
+        }
+      } else if (value !== null && value !== undefined) {
+        // Non-object values that are not null/undefined are considered meaningful
+        console.log(
+          `✅ [MEANINGFUL_ACTIONS] Found meaningful primitive in actions.${key}:`,
+          value
+        );
+        return true;
+      }
+    }
+  }
+
+  // Check grounding metadata
+  if (event.groundingMetadata && typeof event.groundingMetadata === "object") {
+    const metadataKeys = Object.keys(event.groundingMetadata);
+    if (metadataKeys.length > 0) {
+      console.log(
+        `✅ [MEANINGFUL_ACTIONS] Found meaningful grounding metadata:`,
+        event.groundingMetadata
+      );
+      return true;
+    }
+  }
+
+  console.log(
+    `⚠️ [MEANINGFUL_ACTIONS] No meaningful actions found for event ${event.id}`
+  );
+  return false;
+}
+
+/**
  * Reconstructs timeline activities from ADK events
- * Simplified version - can be expanded based on actual event structures
+ * MATCHES REAL-TIME STREAMING: Creates separate "🤔 AI Thinking" activities for each thought section
  */
 function reconstructTimelineFromEvents(events: AdkEvent[]): {
   activities: TimelineActivity[];
@@ -117,15 +277,73 @@ function reconstructTimelineFromEvents(events: AdkEvent[]): {
   const activities: TimelineActivity[] = [];
   const messageCorrelation: Record<number, TimelineActivity[]> = {};
 
-  // Simple timeline reconstruction - this can be enhanced based on actual ADK event patterns
   let messageIndex = 0;
 
   events.forEach((event, index) => {
     // Skip events without content
     if (!event.content) return;
 
-    // Create timeline activities based on event metadata
-    if (event.actions || event.groundingMetadata) {
+    // MATCH REAL-TIME STREAMING: Check for thought parts and create separate "🤔 AI Thinking" activities
+    const thoughtParts = extractThoughtsFromAdkEvent(event);
+    const hasThoughts = thoughtParts.length > 0;
+
+    if (hasThoughts) {
+      // Join all thought parts first, then split into individual thought sections
+      const combinedThoughts = thoughtParts.join(" ");
+
+      console.log(`🔍 [TIMELINE] Combined thoughts for event ${event.id}:`, {
+        combinedThoughts,
+        length: combinedThoughts.length,
+      });
+
+      const thoughtSections = splitThoughtsIntoSections(combinedThoughts);
+
+      console.log(`🔍 [TIMELINE] Thought sections for event ${event.id}:`, {
+        sectionsCount: thoughtSections.length,
+        sections: thoughtSections,
+      });
+
+      thoughtSections.forEach((section, sectionIndex) => {
+        // Always use generic "AI Thinking" title, put specific content inside
+        const title = "🤔 AI Thinking";
+
+        const thoughtActivity: TimelineActivity = {
+          id: `thought_${event.id}_${sectionIndex}`,
+          type: "agent_action",
+          agent: event.author || "assistant",
+          title: title, // Always use generic thinking title
+          timestamp: new Date(event.timestamp),
+          metadata: {
+            type: "thinking",
+            content: section.trim(),
+            invocationId: event.invocationId,
+          },
+        };
+
+        activities.push(thoughtActivity);
+
+        // Associate with current message index
+        if (!messageCorrelation[messageIndex]) {
+          messageCorrelation[messageIndex] = [];
+        }
+        messageCorrelation[messageIndex].push(thoughtActivity);
+
+        console.log(
+          `✅ [TIMELINE] Created thought activity ${sectionIndex + 1}/${
+            thoughtSections.length
+          } for event ${event.id}:`,
+          {
+            title: title,
+            messageIndex: messageIndex,
+            preview: section.substring(0, 100) + "...",
+          }
+        );
+      });
+    }
+
+    // Create other timeline activities ONLY if there are no thought parts AND meaningful actions exist
+    // This prevents duplicate activities and filters out empty/meaningless events
+    if (!hasThoughts && hasMeaningfulActions(event)) {
       const activity: TimelineActivity = {
         id: `activity_${event.id}`,
         type: "agent_action",
@@ -146,6 +364,24 @@ function reconstructTimelineFromEvents(events: AdkEvent[]): {
         messageCorrelation[messageIndex] = [];
       }
       messageCorrelation[messageIndex].push(activity);
+
+      console.log(
+        `✅ [TIMELINE] Created "Processing step" activity for event ${event.id} (meaningful actions):`,
+        {
+          messageIndex: messageIndex,
+          hasActions: !!event.actions,
+          hasGroundingMetadata: !!event.groundingMetadata,
+        }
+      );
+    } else if (!hasThoughts && (event.actions || event.groundingMetadata)) {
+      console.log(
+        `⚠️ [TIMELINE] Skipped "Processing step" for event ${event.id} - no meaningful content:`,
+        {
+          hasActions: !!event.actions,
+          hasGroundingMetadata: !!event.groundingMetadata,
+          actionsContent: event.actions,
+        }
+      );
     }
 
     // Increment message index for AI messages (model role)

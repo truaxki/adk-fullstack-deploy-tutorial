@@ -23,7 +23,7 @@ export function ChatLayout(): React.JSX.Element {
         </div>
 
         {/* Scrollable Messages Area - takes remaining space */}
-        <div className="relative z-10 flex-1 overflow-hidden">
+        <div className="relative z-10 flex-1 min-h-0">
           <ChatContent />
         </div>
 

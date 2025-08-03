@@ -59,15 +59,34 @@ export async function loadSessionHistoryAction(
       if (message.timelineActivities && message.timelineActivities.length > 0) {
         // Convert timeline activities to ProcessedEvent format
         const processedEvents: ProcessedEvent[] =
-          message.timelineActivities.map((activity) => ({
-            title: activity.title,
-            data: {
-              type: activity.type,
-              agent: activity.agent,
-              timestamp: activity.timestamp,
-              metadata: activity.metadata,
-            },
-          }));
+          message.timelineActivities.map((activity) => {
+            // For thinking activities, extract metadata content to match real-time streaming format
+            if (
+              activity.metadata &&
+              typeof activity.metadata === "object" &&
+              "type" in activity.metadata &&
+              activity.metadata.type === "thinking"
+            ) {
+              return {
+                title: activity.title,
+                data: {
+                  type: "thinking",
+                  content: activity.metadata.content || "",
+                },
+              };
+            }
+
+            // For other activities, use the existing format
+            return {
+              title: activity.title,
+              data: {
+                type: activity.type,
+                agent: activity.agent,
+                timestamp: activity.timestamp,
+                metadata: activity.metadata,
+              },
+            };
+          });
         messageEvents.set(message.id, processedEvents);
       }
     });
