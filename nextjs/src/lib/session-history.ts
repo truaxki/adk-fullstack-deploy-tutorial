@@ -45,7 +45,8 @@ export class AdkSessionService {
     if (shouldUseAgentEngine()) {
       // Agent Engine: Use same REST pattern as web project
       const endpoint = getEndpointForPath(
-        `/apps/${appName}/users/${userId}/sessions/${sessionId}`
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}`,
+        "query"
       );
 
       console.log("🔗 [ADK SESSION SERVICE] Agent Engine getSession request:", {
@@ -150,7 +151,8 @@ export class AdkSessionService {
     if (shouldUseAgentEngine()) {
       // Agent Engine: Use same REST pattern as web project
       const endpoint = getEndpointForPath(
-        `/apps/${appName}/users/${userId}/sessions`
+        `/apps/${appName}/users/${userId}/sessions`,
+        "query"
       );
 
       console.log(
@@ -266,7 +268,8 @@ export class AdkSessionService {
     if (shouldUseAgentEngine()) {
       // Agent Engine: Use same REST pattern as web project
       const endpoint = getEndpointForPath(
-        `/apps/${appName}/users/${userId}/sessions/${sessionId}/events`
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/events`,
+        "query"
       );
 
       console.log("🔗 [ADK SESSION SERVICE] Agent Engine listEvents request:", {
