@@ -207,6 +207,37 @@ class JSONFragmentProcessor {
 
     this.currentAgent = fragment.author || "goal_planning_agent";
 
+    // CRITICAL FIX: Process the actual content parts!
+    if (fragment.content?.parts && Array.isArray(fragment.content.parts)) {
+      console.log(
+        `🔍 [JSON PROCESSOR] Found ${fragment.content.parts.length} parts in complete fragment`
+      );
+
+      fragment.content.parts.forEach((part, index) => {
+        if (part.text && typeof part.text === "string") {
+          const partHash = this.hashPart(part);
+
+          if (!this.sentParts.has(partHash)) {
+            console.log(
+              `✅ [JSON PROCESSOR] Processing complete fragment part ${
+                index + 1
+              } (thought: ${part.thought}): ${part.text.substring(0, 100)}...`
+            );
+            this.emitCompletePart(part);
+            this.sentParts.add(partHash);
+          } else {
+            console.log(
+              `⏭️ [JSON PROCESSOR] Skipping duplicate part ${index + 1}`
+            );
+          }
+        }
+      });
+    } else {
+      console.log(
+        `⚠️ [JSON PROCESSOR] No content.parts found in complete fragment`
+      );
+    }
+
     // Stream any additional data (actions, usage_metadata, etc.)
     if (
       fragment.actions ||

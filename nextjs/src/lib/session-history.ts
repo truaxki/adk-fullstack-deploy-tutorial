@@ -2,6 +2,7 @@ import {
   getEndpointForPath,
   getAuthHeaders,
   shouldUseAgentEngine,
+  endpointConfig,
 } from "@/lib/config";
 import type {
   AdkSession,
@@ -198,8 +199,23 @@ export class AgentEngineAdkSessionHistoryService extends AdkSessionHistoryServic
       },
     };
 
+    console.log("🔗 [AGENT ENGINE SESSIONS] Request details:", {
+      endpoint,
+      method: "POST",
+      userId,
+      appName,
+      payload: JSON.stringify(payload, null, 2),
+    });
+
     try {
       const authHeaders = await getAuthHeaders();
+
+      console.log("🔑 [AGENT ENGINE SESSIONS] Auth headers prepared:", {
+        hasAuthorization: !!authHeaders.Authorization,
+        contentType: authHeaders["Content-Type"],
+        headerCount: Object.keys(authHeaders).length,
+      });
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -209,19 +225,82 @@ export class AgentEngineAdkSessionHistoryService extends AdkSessionHistoryServic
         body: JSON.stringify(payload),
       });
 
+      console.log("📡 [AGENT ENGINE SESSIONS] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get("content-type"),
+        contentLength: response.headers.get("content-length"),
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+
       if (!response.ok) {
-        throw new Error(`Failed to list sessions: ${response.statusText}`);
+        let errorDetails = `${response.status} ${response.statusText}`;
+
+        try {
+          const errorBody = await response.text();
+          console.error(
+            "❌ [AGENT ENGINE SESSIONS] Error response body:",
+            errorBody
+          );
+          if (errorBody) {
+            errorDetails += `. Response: ${errorBody}`;
+          }
+        } catch (bodyError) {
+          console.error(
+            "❌ [AGENT ENGINE SESSIONS] Could not read error response body:",
+            bodyError
+          );
+        }
+
+        throw new Error(`Failed to list sessions: ${errorDetails}`);
       }
 
       const result = await response.json();
+      console.log("✅ [AGENT ENGINE SESSIONS] Success response:", {
+        resultKeys: Object.keys(result),
+        resultType: typeof result,
+        hasOutput: !!result.output,
+        outputType: typeof result.output,
+        outputLength: Array.isArray(result.output)
+          ? result.output.length
+          : "not array",
+        fullResult: JSON.stringify(result, null, 2),
+      });
+
       const sessions: AdkSession[] = result.output || [];
+
+      console.log("📋 [AGENT ENGINE SESSIONS] Parsed sessions:", {
+        sessionsCount: sessions.length,
+        sessionIds: sessions.map((s) => s.id || "no-id"),
+        sessionSample:
+          sessions.length > 0
+            ? {
+                firstSession: {
+                  id: sessions[0].id,
+                  userId: sessions[0].user_id,
+                  appName: sessions[0].app_name,
+                  lastUpdate: sessions[0].last_update_time,
+                  hasEvents: !!sessions[0].events,
+                  eventsCount: sessions[0].events?.length || 0,
+                },
+              }
+            : "no sessions",
+      });
 
       return {
         sessions,
         sessionIds: sessions.map((session) => session.id),
       };
     } catch (error) {
-      console.error("Agent Engine list sessions error:", error);
+      console.error("❌ [AGENT ENGINE SESSIONS] Full error details:", {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorType: typeof error,
+        endpoint,
+        userId,
+        appName,
+        payload,
+      });
       throw error;
     }
   }
@@ -298,8 +377,23 @@ export class LocalBackendAdkSessionHistoryService extends AdkSessionHistoryServi
       `/apps/${appName}/users/${userId}/sessions`
     );
 
+    console.log("🔗 [LOCAL BACKEND SESSIONS] Request details:", {
+      endpoint,
+      method: "GET",
+      userId,
+      appName,
+      path: `/apps/${appName}/users/${userId}/sessions`,
+    });
+
     try {
       const authHeaders = await getAuthHeaders();
+
+      console.log("🔑 [LOCAL BACKEND SESSIONS] Auth headers prepared:", {
+        hasAuthorization: !!authHeaders.Authorization,
+        contentType: authHeaders["Content-Type"],
+        headerCount: Object.keys(authHeaders).length,
+      });
+
       const response = await fetch(endpoint, {
         method: "GET",
         headers: {
@@ -307,18 +401,71 @@ export class LocalBackendAdkSessionHistoryService extends AdkSessionHistoryServi
         },
       });
 
+      console.log("📡 [LOCAL BACKEND SESSIONS] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get("content-type"),
+        contentLength: response.headers.get("content-length"),
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+
       if (!response.ok) {
-        throw new Error(`Failed to list sessions: ${response.statusText}`);
+        let errorDetails = `${response.status} ${response.statusText}`;
+
+        try {
+          const errorBody = await response.text();
+          console.error(
+            "❌ [LOCAL BACKEND SESSIONS] Error response body:",
+            errorBody
+          );
+          if (errorBody) {
+            errorDetails += `. Response: ${errorBody}`;
+          }
+        } catch (bodyError) {
+          console.error(
+            "❌ [LOCAL BACKEND SESSIONS] Could not read error response body:",
+            bodyError
+          );
+        }
+
+        throw new Error(`Failed to list sessions: ${errorDetails}`);
       }
 
       const sessions: AdkSession[] = await response.json();
+
+      console.log("✅ [LOCAL BACKEND SESSIONS] Success response:", {
+        sessionsType: typeof sessions,
+        sessionsIsArray: Array.isArray(sessions),
+        sessionsCount: Array.isArray(sessions) ? sessions.length : "not array",
+        sessionSample:
+          Array.isArray(sessions) && sessions.length > 0
+            ? {
+                firstSession: {
+                  id: sessions[0].id,
+                  userId: sessions[0].user_id,
+                  appName: sessions[0].app_name,
+                  lastUpdate: sessions[0].last_update_time,
+                  hasEvents: !!sessions[0].events,
+                  eventsCount: sessions[0].events?.length || 0,
+                },
+              }
+            : "no sessions",
+        rawResponse: JSON.stringify(sessions, null, 2),
+      });
 
       return {
         sessions,
         sessionIds: sessions.map((session) => session.id),
       };
     } catch (error) {
-      console.error("Local backend list sessions error:", error);
+      console.error("❌ [LOCAL BACKEND SESSIONS] Full error details:", {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorType: typeof error,
+        endpoint,
+        userId,
+        appName,
+      });
       throw error;
     }
   }
@@ -350,9 +497,27 @@ export class LocalBackendAdkSessionHistoryService extends AdkSessionHistoryServi
  * Factory function to get the appropriate ADK session history service based on deployment configuration
  */
 export function getAdkSessionHistoryService(): AdkSessionHistoryService {
-  if (shouldUseAgentEngine()) {
+  const useAgentEngine = shouldUseAgentEngine();
+  const deploymentType = endpointConfig.deploymentType;
+  const environment = endpointConfig.environment;
+
+  console.log("🏭 [SESSION SERVICE FACTORY] Determining service type:", {
+    useAgentEngine,
+    deploymentType,
+    environment,
+    agentEngineUrl: endpointConfig.agentEngineUrl,
+    backendUrl: endpointConfig.backendUrl,
+  });
+
+  if (useAgentEngine) {
+    console.log(
+      "✅ [SESSION SERVICE FACTORY] Using Agent Engine session service"
+    );
     return new AgentEngineAdkSessionHistoryService();
   } else {
+    console.log(
+      "✅ [SESSION SERVICE FACTORY] Using Local Backend session service"
+    );
     return new LocalBackendAdkSessionHistoryService();
   }
 }
