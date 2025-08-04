@@ -18,7 +18,6 @@ export function MessageArea(): React.JSX.Element {
   const {
     messages,
     messageEvents,
-    websiteCount,
     isLoading,
     isLoadingHistory,
     userId,
@@ -55,7 +54,6 @@ export function MessageArea(): React.JSX.Element {
       <MessageList
         messages={messages}
         messageEvents={messageEvents}
-        websiteCount={websiteCount}
         isLoading={isLoading}
         onCopy={handleCopy}
         copiedMessageId={copiedMessageId}

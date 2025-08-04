@@ -14,7 +14,6 @@ export interface ParsedSSEData {
   textParts: string[];
   thoughtParts: string[];
   agent: string;
-  finalReportWithCitations?: boolean;
   functionCall?: {
     name: string;
     args: Record<string, unknown>;
@@ -25,8 +24,6 @@ export interface ParsedSSEData {
     response: Record<string, unknown>;
     id: string;
   };
-  sourceCount: number;
-  sources?: Record<string, { title: string; url: string }>;
 }
 
 /**
@@ -51,13 +48,6 @@ export interface RawSSEData {
     }>;
   };
   author?: string;
-  actions?: {
-    stateDelta?: {
-      final_report_with_citations?: boolean;
-      url_to_short_id?: Record<string, string>;
-      sources?: Record<string, { title: string; url: string }>;
-    };
-  };
 }
 
 /**

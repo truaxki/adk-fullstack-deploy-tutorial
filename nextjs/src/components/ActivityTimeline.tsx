@@ -14,7 +14,6 @@ import {
   Pen,
   ChevronDown,
   ChevronUp,
-  Link,
   Code,
   FileText,
 } from "lucide-react";
@@ -29,13 +28,11 @@ export interface ProcessedEvent {
 interface ActivityTimelineProps {
   processedEvents: ProcessedEvent[];
   isLoading: boolean;
-  websiteCount: number;
 }
 
 export function ActivityTimeline({
   processedEvents,
   isLoading,
-  websiteCount,
 }: ActivityTimelineProps): React.JSX.Element {
   const [isTimelineCollapsed, setIsTimelineCollapsed] =
     useState<boolean>(false);
@@ -174,12 +171,6 @@ export function ActivityTimeline({
               <CardDescription className="text-neutral-300 font-medium">
                 AI Activity Timeline
               </CardDescription>
-              {websiteCount > 0 && (
-                <div className="flex items-center gap-1 text-xs text-neutral-400">
-                  <Link className="h-3 w-3" />
-                  <span>{websiteCount} sources</span>
-                </div>
-              )}
             </div>
             <button
               onClick={() => setIsTimelineCollapsed(!isTimelineCollapsed)}

@@ -13,7 +13,6 @@ import { Message } from "@/types";
 interface MessageItemProps {
   message: Message;
   messageEvents?: Map<string, ProcessedEvent[]>;
-  websiteCount?: number;
   isLoading?: boolean;
   onCopy?: (text: string, messageId: string) => void;
   copiedMessageId?: string | null;
@@ -26,7 +25,6 @@ interface MessageItemProps {
 export function MessageItem({
   message,
   messageEvents,
-  websiteCount = 0,
   isLoading = false,
   onCopy,
   copiedMessageId,
@@ -110,8 +108,9 @@ export function MessageItem({
     messageEvents.has(message.id) &&
     messageEvents.get(message.id)!.length > 0;
 
-  // AI message with no content and loading - show thinking indicator with timeline
-  if (!message.content && isLoading) {
+  // AI message loading with timeline events - show thinking indicator
+  // Show this when loading AND we have timeline events (even if content started arriving)
+  if (isLoading && hasTimelineEvents) {
     return (
       <div className="flex items-start gap-3 max-w-[90%]">
         <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-md border border-emerald-400/30">
@@ -124,15 +123,23 @@ export function MessageItem({
             <ActivityTimeline
               processedEvents={messageEvents.get(message.id) || []}
               isLoading={isLoading}
-              websiteCount={websiteCount}
             />
+          )}
+
+          {/* Show content if it exists while loading */}
+          {message.content && (
+            <div className="prose prose-invert max-w-none mb-3">
+              <MarkdownRenderer content={message.content} />
+            </div>
           )}
 
           {/* Loading indicator */}
           <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2">
             <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
             <span className="text-sm text-slate-400">
-              🤔 Thinking and planning...
+              {message.content
+                ? "🚀 Still processing..."
+                : "🤔 Thinking and planning..."}
             </span>
           </div>
         </div>
@@ -154,7 +161,6 @@ export function MessageItem({
             <ActivityTimeline
               processedEvents={messageEvents.get(message.id) || []}
               isLoading={isLoading}
-              websiteCount={websiteCount}
             />
 
             {/* Show thinking indicator */}
@@ -192,7 +198,6 @@ export function MessageItem({
           <ActivityTimeline
             processedEvents={messageEvents.get(message.id) || []}
             isLoading={isLoading}
-            websiteCount={websiteCount}
           />
         )}
 

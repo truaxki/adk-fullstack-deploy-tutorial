@@ -40,16 +40,8 @@ export async function processSseEventData(
   currentAgentRef: { current: string },
   setCurrentAgent: (agent: string) => void
 ): Promise<void> {
-  const {
-    textParts,
-    thoughtParts,
-    agent,
-    finalReportWithCitations,
-    functionCall,
-    functionResponse,
-    sourceCount,
-    sources,
-  } = extractDataFromSSE(jsonData);
+  const { textParts, thoughtParts, agent, functionCall, functionResponse } =
+    extractDataFromSSE(jsonData);
 
   // Use frontend-generated aiMessageId for consistent message correlation
   // Backend sends different IDs for each SSE event, which would create separate messages
@@ -59,11 +51,6 @@ export async function processSseEventData(
   if (agent && agent !== currentAgentRef.current) {
     currentAgentRef.current = agent;
     setCurrentAgent(agent);
-  }
-
-  // Update website count if sources found
-  if (sourceCount > 0) {
-    callbacks.onWebsiteCountUpdate(Math.max(sourceCount, 0));
   }
 
   // Process function calls
@@ -81,13 +68,28 @@ export async function processSseEventData(
   }
 
   // Process AI thoughts - show in timeline for transparency
+  console.log("🔍 [STREAM PROCESSOR] Checking for thoughts:", {
+    thoughtPartsLength: thoughtParts.length,
+    thoughtParts: thoughtParts.map((t) => t.substring(0, 50) + "..."),
+    hasThoughts: thoughtParts.length > 0,
+  });
+
   if (thoughtParts.length > 0) {
+    console.log("🧠 [STREAM PROCESSOR] Processing thoughts:", {
+      thoughtCount: thoughtParts.length,
+      agent,
+      messageId: actualMessageId,
+    });
+
     processThoughts(
       thoughtParts,
       agent,
       actualMessageId,
-      callbacks.onEventUpdate
+      callbacks.onEventUpdate,
+      callbacks.onMessageUpdate // Create AI message so timeline has somewhere to attach
     );
+  } else {
+    console.log("⚠️ [STREAM PROCESSOR] No thoughts to process");
   }
 
   // Process text content using OFFICIAL ADK TERMINATION SIGNAL PATTERN
@@ -99,36 +101,6 @@ export async function processSseEventData(
       accumulatedTextRef,
       callbacks.onMessageUpdate
     );
-  }
-
-  // Process sources if available
-  if (sources) {
-    createDebugLog(
-      "SSE HANDLER",
-      "Adding Retrieved Sources timeline event:",
-      sources
-    );
-    callbacks.onEventUpdate(actualMessageId, {
-      title: "Retrieved Sources",
-      data: { type: "sources", content: sources },
-    });
-  }
-
-  // Handle final report with citations - use existing message ID, don't create fake messages
-  if (agent === "report_composer_with_citations" && finalReportWithCitations) {
-    createDebugLog(
-      "SSE HANDLER",
-      "Updating existing message with final report for agent:",
-      agent
-    );
-    // Update the existing message with the final report content
-    // Don't create a new message with fake ID - use the aiMessageId from backend events
-    callbacks.onMessageUpdate({
-      type: "ai",
-      content: String(finalReportWithCitations),
-      id: aiMessageId, // Use the real backend-provided ID
-      timestamp: new Date(Date.now()), // For now, but this should come from backend too
-    });
   }
 }
 
@@ -197,6 +169,52 @@ function processFunctionResponse(
 }
 
 /**
+ * Parses a thought string and splits it into sections based on markdown headers
+ *
+ * @param thought - Raw thought content with **Header** sections
+ * @returns Array of sections with title and content
+ */
+function parseThoughtSections(
+  thought: string
+): Array<{ title?: string; content: string }> {
+  // Split by markdown headers (**Header**)
+  const sections = thought.split(/(?=\*\*[^*]+\*\*)/);
+
+  const parsedSections: Array<{ title?: string; content: string }> = [];
+
+  for (const section of sections) {
+    const trimmedSection = section.trim();
+    if (!trimmedSection) continue;
+
+    // Extract title from **Title** pattern
+    const titleMatch = trimmedSection.match(/^\*\*([^*]+?)\*\*/);
+
+    if (titleMatch) {
+      const title = titleMatch[1].trim();
+      // Get content after the title (remove the **Title** part)
+      const content = trimmedSection.replace(/^\*\*[^*]+?\*\*\s*/, "").trim();
+
+      parsedSections.push({
+        title,
+        content: content || trimmedSection, // Fallback to full section if no content
+      });
+    } else {
+      // No title found, use entire section as content
+      parsedSections.push({
+        content: trimmedSection,
+      });
+    }
+  }
+
+  // If no sections were found, return the original content as one section
+  if (parsedSections.length === 0) {
+    parsedSections.push({ content: thought });
+  }
+
+  return parsedSections;
+}
+
+/**
  * Processes AI thought parts - creates separate activities for each distinct thought
  *
  * @param thoughtParts - Array of thought strings from parsed SSE
@@ -208,7 +226,8 @@ function processThoughts(
   thoughtParts: string[],
   agent: string,
   aiMessageId: string,
-  onEventUpdate: (messageId: string, event: ProcessedEvent) => void
+  onEventUpdate: (messageId: string, event: ProcessedEvent) => void,
+  onMessageUpdate?: (message: Message) => void
 ): void {
   createDebugLog(
     "SSE HANDLER",
@@ -216,65 +235,58 @@ function processThoughts(
     { thoughts: thoughtParts }
   );
 
-  // Join all thought parts first (they come as separate parts from SSE)
-  const combinedThoughts = thoughtParts.join(" ");
+  // Create AI message to enable timeline display - but preserve any existing content
+  if (onMessageUpdate) {
+    createDebugLog(
+      "THOUGHT DEBUG",
+      "🚀 Creating/updating AI message for thoughts",
+      {
+        aiMessageId,
+        hasCallback: !!onMessageUpdate,
+      }
+    );
 
-  createDebugLog("SSE HANDLER", "Combined thoughts before splitting:", {
-    combinedThoughts,
-    length: combinedThoughts.length,
-  });
-
-  // Split by double newlines or by ** headers to get individual thought sections
-  const thoughtSections = splitThoughtsIntoSections(combinedThoughts);
-
-  createDebugLog("SSE HANDLER", "Thought sections after splitting:", {
-    sectionsCount: thoughtSections.length,
-    sections: thoughtSections,
-  });
-
-  thoughtSections.forEach((section, index) => {
-    // Always use generic "AI Thinking" title, put specific content inside
-    const title = "🤔 AI Thinking";
-
-    onEventUpdate(aiMessageId, {
-      title: title,
-      data: { type: "thinking", content: section.trim() },
+    // Create message for timeline attachment
+    // NOTE: This will be updated by text content processing if text arrives
+    flushSync(() => {
+      onMessageUpdate({
+        type: "ai",
+        content: "", // Empty initially - will be updated by text processing
+        id: aiMessageId,
+        timestamp: new Date(),
+      });
     });
 
     createDebugLog(
-      "SSE HANDLER",
-      `Created thought activity ${index + 1}/${thoughtSections.length}:`,
-      {
-        title,
-        contentLength: section.length,
-        preview: section.substring(0, 100) + "...",
-      }
+      "THOUGHT DEBUG",
+      "✅ AI message created for timeline display"
     );
+  } else {
+    createDebugLog("THOUGHT DEBUG", "❌ No onMessageUpdate callback available");
+  }
+
+  // Process each thought and split by section headers for better organization
+  thoughtParts.forEach((thought) => {
+    createDebugLog("SSE HANDLER", "Processing individual thought:", {
+      thought: thought.substring(0, 100) + "...",
+      length: thought.length,
+    });
+
+    // Split thought into sections by headers (bold titles)
+    const sections = parseThoughtSections(thought);
+
+    // Create separate timeline activity for each section
+    sections.forEach((section) => {
+      flushSync(() => {
+        onEventUpdate(aiMessageId, {
+          title: section.title
+            ? `🤔 ${section.title}`
+            : `🤔 ${agent} is thinking...`,
+          data: { type: "thinking", content: section.content },
+        });
+      });
+    });
   });
-}
-
-/**
- * Splits combined thought text into individual thought sections
- */
-function splitThoughtsIntoSections(combinedThoughts: string): string[] {
-  // Split by double newlines followed by ** (start of new thought section)
-  // This preserves complete thought sections including their headers and content
-  const sections = combinedThoughts.split(/\n\n(?=\*\*)/);
-
-  return sections
-    .map((section) => section.trim())
-    .filter((section) => section.length > 0 && section.includes("**"));
-}
-
-/**
- * Extracts the title from a thought section (the bold header)
- * Currently unused but kept for potential future use
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function extractThoughtTitle(thoughtSection: string): string {
-  // Look for **Title** pattern at the start of the section
-  const match = thoughtSection.match(/^\*\*([^*]+?)\*\*/);
-  return match ? `🤔 ${match[1].trim()}` : "🤔 AI Thinking";
 }
 
 /**
@@ -300,7 +312,28 @@ async function processTextContent(
     // 🎯 OFFICIAL ADK TERMINATION SIGNAL PATTERN (matches Angular implementation):
     // if (newChunk == this.streamingTextMessage.text) { return; }
     if (text === currentAccumulated && currentAccumulated.length > 0) {
-      // Official ADK pattern: this is the termination signal, don't add to UI
+      // Official ADK pattern: this is the termination signal
+      // But we still need to ensure the final message state is preserved
+      createDebugLog(
+        "STREAM PROCESSOR",
+        "Received termination signal, ensuring final message state",
+        {
+          finalContentLength: currentAccumulated.length,
+        }
+      );
+
+      // Make sure the final message is properly set in the UI
+      const finalMessage: Message = {
+        type: "ai",
+        content: currentAccumulated.trim(),
+        id: aiMessageId,
+        timestamp: new Date(),
+      };
+
+      flushSync(() => {
+        onMessageUpdate(finalMessage);
+      });
+
       return;
     }
 

@@ -9,7 +9,6 @@ import { ProcessedEvent } from "@/components/ActivityTimeline";
 interface MessageListProps {
   messages: Message[];
   messageEvents?: Map<string, ProcessedEvent[]>;
-  websiteCount?: number;
   isLoading?: boolean;
   onCopy?: (text: string, messageId: string) => void;
   copiedMessageId?: string | null;
@@ -23,7 +22,6 @@ interface MessageListProps {
 export function MessageList({
   messages,
   messageEvents,
-  websiteCount = 0,
   isLoading = false,
   onCopy,
   copiedMessageId,
@@ -53,7 +51,6 @@ export function MessageList({
             key={message.id}
             message={message}
             messageEvents={messageEvents}
-            websiteCount={websiteCount}
             // Only show loading for the last message
             isLoading={isLoading && index === messages.length - 1}
             onCopy={onCopy}

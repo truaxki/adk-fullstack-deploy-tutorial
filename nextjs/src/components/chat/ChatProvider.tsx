@@ -95,11 +95,26 @@ export function ChatProvider({
     userId,
     sessionId,
     onMessageUpdate: (message: Message) => {
+      console.log("🔄 [CHAT_PROVIDER] onMessageUpdate called:", {
+        messageId: message.id,
+        messageType: message.type,
+        contentLength: message.content.length,
+        hasContent: !!message.content,
+      });
+
       setMessages((prev) => {
         const existingMessage = prev.find((msg) => msg.id === message.id);
+        console.log("🔍 [CHAT_PROVIDER] Message state check:", {
+          messageId: message.id,
+          existingMessage: !!existingMessage,
+          totalMessages: prev.length,
+          lastMessageType:
+            prev.length > 0 ? prev[prev.length - 1].type : "none",
+        });
 
         if (existingMessage) {
           // Update existing message while preserving any additional data
+          console.log("🔄 [CHAT_PROVIDER] Updating existing message");
           return prev.map((msg) =>
             msg.id === message.id
               ? {
@@ -114,29 +129,56 @@ export function ChatProvider({
             ...message,
             timestamp: message.timestamp || new Date(),
           };
-          return [...prev, newMessage];
+          console.log("✅ [CHAT_PROVIDER] Creating new message:", {
+            id: newMessage.id,
+            type: newMessage.type,
+            contentLength: newMessage.content.length,
+          });
+          const newMessages = [...prev, newMessage];
+          console.log("📊 [CHAT_PROVIDER] Updated messages array:", {
+            totalMessages: newMessages.length,
+            lastMessageType: newMessages[newMessages.length - 1].type,
+          });
+          return newMessages;
         }
       });
     },
     onEventUpdate: (messageId, event) => {
+      console.log("📅 [CHAT_PROVIDER] onEventUpdate called:", {
+        messageId,
+        eventTitle: event.title,
+        eventType:
+          typeof event.data === "object" && event.data && "type" in event.data
+            ? event.data.type
+            : undefined,
+        isThought: event.title.startsWith("🤔"),
+      });
+
       setMessageEvents((prev) => {
         const newMap = new Map(prev);
         const existingEvents = newMap.get(messageId) || [];
+        console.log("🔍 [CHAT_PROVIDER] Event state check:", {
+          messageId,
+          existingEventsCount: existingEvents.length,
+          eventTitle: event.title,
+        });
 
-        // Deduplicate thinking activities by exact title to prevent duplicates
+        // Handle thinking activities with progressive content accumulation
         if (event.title.startsWith("🤔")) {
           const existingThinkingIndex = existingEvents.findIndex(
             (existingEvent) => existingEvent.title === event.title
           );
 
           if (existingThinkingIndex >= 0) {
-            // Update existing thinking activity with new content
+            // Accumulate content progressively instead of replacing
             const updatedEvents = [...existingEvents];
             const existingEvent = updatedEvents[existingThinkingIndex];
             const existingData =
               existingEvent.data && typeof existingEvent.data === "object"
                 ? existingEvent.data
                 : {};
+            const existingContent =
+              "content" in existingData ? String(existingData.content) : "";
             const newContent =
               event.data &&
               typeof event.data === "object" &&
@@ -144,11 +186,16 @@ export function ChatProvider({
                 ? String(event.data.content)
                 : "";
 
+            // Accumulate content (don't replace - add new content)
+            const accumulatedContent = existingContent
+              ? `${existingContent}\n\n${newContent}`
+              : newContent;
+
             updatedEvents[existingThinkingIndex] = {
               ...existingEvent,
               data: {
                 ...existingData,
-                content: newContent,
+                content: accumulatedContent,
               },
             };
             newMap.set(messageId, updatedEvents);

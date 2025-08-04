@@ -3,7 +3,7 @@
  *
  * This module handles the extraction and parsing of Server-Sent Event (SSE) data.
  * It contains complex JSON parsing logic for various types of SSE messages
- * including text content, thoughts, function calls, function responses, and sources.
+ * including text content, thoughts, function calls, and function responses.
  */
 
 import { ParsedSSEData, RawSSEData } from "./types";
@@ -21,14 +21,20 @@ import { ParsedSSEData, RawSSEData } from "./types";
 export function extractDataFromSSE(data: string): ParsedSSEData {
   try {
     const parsed: RawSSEData = JSON.parse(data);
-    console.log("[SSE PARSED EVENT]:", JSON.stringify(parsed, null, 2));
+
+    console.log("📄 [SSE PARSER] Raw parsed JSON:", {
+      hasContent: !!parsed.content,
+      hasParts: !!(parsed.content && parsed.content.parts),
+      partsLength: parsed.content?.parts?.length || 0,
+      author: parsed.author,
+      id: parsed.id,
+      rawData: JSON.stringify(parsed, null, 2),
+    });
 
     let textParts: string[] = [];
     let agent = "";
-    let finalReportWithCitations = undefined;
     let functionCall = undefined;
     let functionResponse = undefined;
-    let sources = undefined;
 
     // Extract message ID from backend
     const messageId = parsed.id;
@@ -36,18 +42,32 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
     // Extract text from content.parts (separate thoughts from regular text)
     let thoughtParts: string[] = [];
     if (parsed.content && parsed.content.parts) {
-      console.log("[SSE DEBUG] Processing content.parts for text extraction");
-      
-      // For Agent Engine, include ALL text parts (thoughts and non-thoughts) in main display
-      // since Agent Engine often marks substantial response content as "thoughts"
+      console.log("🔍 [SSE PARSER] Processing content.parts:", {
+        partsCount: parsed.content.parts.length,
+        parts: parsed.content.parts.map(
+          (part: { text?: string; thought?: boolean }, index: number) => ({
+            index,
+            hasText: !!part.text,
+            hasThought: !!part.thought,
+            thoughtValue: part.thought,
+            textPreview: part.text
+              ? part.text.substring(0, 100) + "..."
+              : "no text",
+          })
+        ),
+      });
+
+      // ALWAYS filter out thoughts from main text content (like working /web/ project)
+      // This ensures thoughts are processed separately as timeline activities
       textParts = parsed.content.parts
-        .filter((part: { text?: string }) => part.text)
+        .filter(
+          (part: { text?: string; thought?: boolean }) =>
+            part.text && !part.thought
+        )
         .map((part: { text?: string }) => part.text!)
         .filter((text): text is string => text !== undefined);
 
-      console.log("[SSE DEBUG] All textParts (including thoughts):", textParts);
-
-      // Extract thoughts separately for timeline activities
+      // Extract thoughts separately for timeline activities (for both backends)
       thoughtParts = parsed.content.parts
         .filter(
           (part: { text?: string; thought?: boolean }) =>
@@ -55,6 +75,13 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
         )
         .map((part: { text?: string }) => part.text!)
         .filter((text): text is string => text !== undefined);
+
+      console.log("🧠 [SSE PARSER] Thought extraction results:", {
+        thoughtPartsCount: thoughtParts.length,
+        textPartsCount: textParts.length,
+        thoughtPreviews: thoughtParts.map((t) => t.substring(0, 50) + "..."),
+        textPreviews: textParts.map((t) => t.substring(0, 50) + "..."),
+      });
 
       // Check for function calls
       const functionCallPart = parsed.content.parts.find(
@@ -84,36 +111,6 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
     // Extract agent information
     if (parsed.author) {
       agent = parsed.author;
-      console.log("[SSE EXTRACT] Agent:", agent);
-    }
-
-    // Extract final report flag
-    if (
-      parsed.actions &&
-      parsed.actions.stateDelta &&
-      parsed.actions.stateDelta.final_report_with_citations
-    ) {
-      finalReportWithCitations =
-        parsed.actions.stateDelta.final_report_with_citations;
-    }
-
-    // Extract website count from research agents
-    let sourceCount = 0;
-    if (parsed.actions?.stateDelta?.url_to_short_id) {
-      console.log(
-        "[SSE EXTRACT] url_to_short_id found:",
-        parsed.actions.stateDelta.url_to_short_id
-      );
-      sourceCount = Object.keys(
-        parsed.actions.stateDelta.url_to_short_id
-      ).length;
-      console.log("[SSE EXTRACT] Calculated sourceCount:", sourceCount);
-    }
-
-    // Extract sources if available
-    if (parsed.actions?.stateDelta?.sources) {
-      sources = parsed.actions.stateDelta.sources;
-      console.log("[SSE EXTRACT] Sources found:", sources);
     }
 
     return {
@@ -121,11 +118,8 @@ export function extractDataFromSSE(data: string): ParsedSSEData {
       textParts,
       thoughtParts,
       agent,
-      finalReportWithCitations,
       functionCall,
       functionResponse,
-      sourceCount,
-      sources,
     };
   } catch (error) {
     return handleSSEParsingError(data, error);
@@ -154,11 +148,8 @@ function handleSSEParsingError(data: string, error: unknown): ParsedSSEData {
     textParts: [],
     thoughtParts: [],
     agent: "",
-    finalReportWithCitations: undefined,
     functionCall: undefined,
     functionResponse: undefined,
-    sourceCount: 0,
-    sources: undefined,
   };
 }
 
@@ -172,8 +163,7 @@ export function validateParsedSSEData(data: ParsedSSEData): boolean {
   return (
     Array.isArray(data.textParts) &&
     Array.isArray(data.thoughtParts) &&
-    typeof data.agent === "string" &&
-    typeof data.sourceCount === "number"
+    typeof data.agent === "string"
   );
 }
 
@@ -189,7 +179,6 @@ export function hasSSEContent(data: ParsedSSEData): boolean {
     data.thoughtParts.length > 0 ||
     data.functionCall !== undefined ||
     data.functionResponse !== undefined ||
-    data.sourceCount > 0 ||
     data.agent !== ""
   );
 }
