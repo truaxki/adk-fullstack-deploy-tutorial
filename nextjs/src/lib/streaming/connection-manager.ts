@@ -62,8 +62,6 @@ export class StreamingConnectionManager {
     currentAgentRef.current = "";
     this.abortController = new AbortController();
 
-    // Don't create fake messages - wait for backend events to provide real message data
-
     try {
       createDebugLog(
         "CONNECTION",

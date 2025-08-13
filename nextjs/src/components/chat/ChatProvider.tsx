@@ -306,7 +306,7 @@ export function ChatProvider({
     }
   }, [messages]);
 
-  // Handle message submission - consolidated from ChatInterface
+  // Handle message submission
   const handleSubmit = useCallback(
     async (
       query: string,
