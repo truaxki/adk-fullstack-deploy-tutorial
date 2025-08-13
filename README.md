@@ -1,266 +1,223 @@
-# Gemini Fullstack Agent Development Kit (ADK) Quickstart
+# ADK Fullstack Deploy Tutorial
 
-The **Gemini Fullstack Agent Development Kit (ADK) Quickstart** is a production-ready blueprint for building a sophisticated, fullstack research agent with Gemini. It's built to demonstrate how the ADK helps structure complex agentic workflows, build modular agents, and incorporate critical Human-in-the-Loop (HITL) steps.
-**Original code:** https://github.com/google/adk-samples/tree/main/python/agents/gemini-fullstack#a-google-ai-studio
+Production-ready fullstack template showing how to wire a Python ADK backend to a modern Next.js frontend with streaming responses, local development, and deployment paths to Vertex AI Agent Engine and Vercel.
 
-<table>
-  <thead>
-    <tr>
-      <th colspan="2">Key Features</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>🏗️</td>
-      <td><strong>Fullstack & Production-Ready:</strong> A complete React frontend and ADK-powered FastAPI backend, with deployment options for <a href="https://cloud.google.com/run">Google Cloud Run</a> and <a href="https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview">Vertex AI Agent Engine</a>.</td>
-    </tr>
-    <tr>
-      <td>🧠</td>
-      <td><strong>Advanced Agentic Workflow:</strong> The agent uses Gemini to <strong>strategize</strong> a multi-step plan, <strong>reflect</strong> on findings to identify gaps, and <strong>synthesize</strong> a final, comprehensive report.</td>
-    </tr>
-    <tr>
-      <td>🔄</td>
-      <td><strong>Iterative & Human-in-the-Loop Research:</strong> Involves the user for plan approval, then autonomously loops through searching (via Gemini function calling) and refining its results until it has gathered sufficient information.</td>
-    </tr>
-  </tbody>
-</table>
+This repo contains:
 
-Here is the agent in action:
+- Backend: Python app using Google ADK to run a goal-planning LLM agent
+- Frontend: Next.js app with a chat UI, activity timeline, and SSE streaming
+- Make targets and scripts to run locally and deploy
 
-<img src="https://github.com/GoogleCloudPlatform/agent-starter-pack/blob/main/docs/images/adk_gemini_fullstack.gif?raw=true" width="80%" alt="Gemini Fullstack ADK Preview">
+## Quickstart
 
-This project adapts concepts from the [Gemini FullStack LangGraph Quickstart](https://github.com/google-gemini/gemini-fullstack-langgraph-quickstart) for the frontend app. 
+Prerequisites:
 
-## 🚀 Getting Started: From Zero to Running Agent in 1 Minute
-**Prerequisites:** **[Python 3.10+](https://www.python.org/downloads/)**, **[Node.js](https://nodejs.org/)**, **[uv](https://github.com/astral-sh/uv)**
+- Python 3.10–3.12
+- Node.js 18+ (recommended: LTS)
+- uv (installed automatically by Makefile if missing)
+- Google Cloud SDK for cloud deployment
 
-You have two options to get started. Choose the one that best fits your setup:
-
-*   A. **[Google AI Studio](#a-google-ai-studio)**: Choose this path if you want to use a **Google AI Studio API key**. This method involves cloning the sample repository.
-*   B. **[Google Cloud Vertex AI](#b-google-cloud-vertex-ai)**: Choose this path if you want to use an existing **Google Cloud project** for authentication. This method generates a new, prod-ready project using the [agent-starter-pack](https://goo.gle/agent-starter-pack) including all the deployment scripts required.
-
----
-
-### A. Google AI Studio
-
-You'll need a **[Google AI Studio API Key](https://aistudio.google.com/app/apikey)**.
-
-#### Step 1: Clone Repository
-Clone the repository and `cd` into the project directory.
+Setup and run locally (backend + frontend):
 
 ```bash
-git clone https://github.com/google/adk-samples.git
-cd adk-samples/python/agents/gemini-fullstack
+make install
+cp app/.env.example app/.env  # if present, otherwise see Backend env below
+make dev
 ```
 
-#### Step 2: Set Environment Variables
-Create a `.env` file in the `app` folder by running the following command (replace YOUR_AI_STUDIO_API_KEY with your actual API key):
+By default the frontend runs at `http://localhost:3000` and proxies chat requests to the local ADK backend at `http://127.0.0.1:8000` via `nextjs/src/app/api/run_sse/route.ts`.
+
+## Features
+
+- Goal-planning LLM agent powered by Google ADK (`app/agent.py`)
+- Environment-driven routing to either local backend or Vertex AI Agent Engine
+- Robust SSE pipeline with JSON-fragment processing for Agent Engine
+- Chat UI with message list, streaming content, and activity timeline
+- Health checks and helpful error formatting
+
+## Tech Stack
+
+- Backend: Python, `google-adk`, `vertexai`, `python-dotenv`
+- Frontend: Next.js 15, React 19, TailwindCSS, shadcn/ui
+- Tooling: `uv` for Python deps, ESLint + Jest for the frontend, Ruff + Mypy for backend linting/type-checking
+
+## Project Structure
+
+```
+app/                       # Python ADK backend
+  agent.py                 # Root agent definition (goal-planning)
+  agent_engine_app.py      # Deployment helper for Vertex AI Agent Engine
+  config.py                # Env loading, Vertex init, deployment config
+  utils/                   # GCS + tracing helpers
+
+nextjs/                    # Next.js frontend
+  src/app/api/health       # Proxies health checks to backend
+  src/app/api/run_sse      # Streaming endpoint (local or Agent Engine)
+  src/lib/config.ts        # Env detection + endpoint resolution
+  src/lib/handlers/        # Streaming handlers (local/agent-engine)
+  src/components/chat/     # Chat UI and timeline components
+
+Makefile                   # install/dev/lint + Agent Engine deploy helper
+pyproject.toml             # Python deps and linters
+```
+
+## Backend
+
+### Agent
+
+`app/agent.py` defines an ADK `LlmAgent` with built-in planning enabled. It accepts a high-level goal and produces a structured plan and execution steps. The model defaults to `gemini-2.5-flash` and can be changed via env.
+
+### Environment
+
+Create `app/.env` with at least the following for local development and deployment:
 
 ```bash
-echo "GOOGLE_GENAI_USE_VERTEXAI=FALSE" >> app/.env
-echo "GOOGLE_API_KEY=YOUR_AI_STUDIO_API_KEY" >> app/.env
+# Required
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+
+# Staging bucket for Vertex AI/Agent Engine packaging
+# Provide a valid bucket identifier. Example: my-staging-bucket
+# (Do not include gs:// prefix.)
+GOOGLE_CLOUD_STAGING_BUCKET=my-staging-bucket
+
+# Optional
+MODEL=gemini-2.5-flash
+AGENT_NAME=goal-planning-agent
+EXTRA_PACKAGES=./app
+REQUIREMENTS_FILE=.requirements.txt
 ```
 
-#### Step 3: Install & Run
-From the `gemini-fullstack` directory, install dependencies and start the servers.
+Notes:
+
+- Configuration is validated at import time in `app/config.py` and initializes Vertex AI.
+- The Makefile’s deploy target will generate `.requirements.txt` for Agent Engine using `uv export`.
+
+### Run the backend (dev)
+
+The Makefile starts the ADK API server for you:
 
 ```bash
-make install && make dev
+make dev-backend
+# or run both backend and frontend together
+make dev
 ```
-Your agent is now running at `http://localhost:5173`.
 
----
+This uses `uv run adk api_server app --allow_origins="*"` which serves the ADK HTTP API at `http://127.0.0.1:8000`.
 
-### B. Google Cloud Vertex AI
+## Frontend
 
-You'll also need: **[Google Cloud SDK](https://cloud.google.com/sdk/docs/install)** and a **Google Cloud Project** with the **Vertex AI API** enabled.
+### Environment
 
-#### Step 1: Create Project from Template
-This command uses the [Agent Starter Pack](https://goo.gle/agent-starter-pack) to create a new directory (`my-fullstack-agent`) with all the necessary code.
-```bash
-# Create and activate a virtual environment
-python -m venv .venv && source .venv/bin/activate # On Windows: .venv\Scripts\activate
+Create `nextjs/.env.local`:
 
-# Install the starter pack and create your project
-pip install --upgrade agent-starter-pack
-agent-starter-pack create my-fullstack-agent -a adk_gemini_fullstack
-```
-<details>
-<summary>⚡️ Alternative: Using uv</summary>
-
-If you have [`uv`](https://github.com/astral-sh/uv) installed, you can create and set up your project with a single command:
-```bash
-uvx agent-starter-pack create my-fullstack-agent -a adk_gemini_fullstack
-```
-This command handles creating the project without needing to pre-install the package into a virtual environment.
-</details>
-
-You'll be prompted to select a deployment option (Agent Engine or Cloud Run) and verify your Google Cloud credentials.
-
-#### Step 2: Install & Run
-Navigate into your **newly created project folder**, then install dependencies and start the servers.
-```bash
-cd my-fullstack-agent && make install && make dev
-```
-Your agent is now running at `http://localhost:5173`.
-
-## ☁️ Cloud Deployment
-> **Note:** The cloud deployment instructions below apply only if you chose the **Google Cloud Vertex AI** option.
-
-### 🎯 Recommended: Deploy to Agent Engine (Managed Infrastructure)
-
-The **preferred deployment method** is to use Agent Engine, which provides managed infrastructure, session handling, and enterprise features:
+Local backend (default):
 
 ```bash
-# Deploy to Agent Engine (simple command!)
-adk deploy agent_engine app
+BACKEND_URL=http://127.0.0.1:8000
+NODE_ENV=development
 ```
 
-**Prerequisites:** 
-1. **Authentication & Project Setup:**
-   ```bash
-   gcloud auth application-default login
-   gcloud config set project your-project-id
-   ```
-
-2. **Environment Configuration:**
-   ```bash
-   cp app/.env.example app/.env
-   # Edit app/.env with your project details and staging bucket
-   ```
-
-3. **Create Staging Bucket:** Create a GCS bucket in the [Google Cloud Console](https://console.cloud.google.com/storage) and add it to your `.env` file as `GOOGLE_CLOUD_STAGING_BUCKET=gs://your-bucket-name`
-
-This command will:
-- Deploy your agent to a fully managed runtime
-- Handle session management and scaling automatically
-- Provide enterprise-grade security and monitoring
-- Return an agent resource ID for integration
-
-### Alternative: Quick Development Deployment
-
-For quick development iterations, you can also use:
+Agent Engine (direct streaming):
 
 ```bash
-# Replace YOUR_DEV_PROJECT_ID with your actual Google Cloud Project ID
-gcloud config set project YOUR_DEV_PROJECT_ID
-make backend
+AGENT_ENGINE_ENDPOINT=https://us-central1-aiplatform.googleapis.com/v1/projects/your-project/locations/us-central1/reasoningEngines/YOUR_ENGINE_ID
+
+# Required when calling Agent Engine directly (e.g. Vercel):
+# Base64-encoded service account JSON with permissions for Agent Engine
+GOOGLE_SERVICE_ACCOUNT_KEY_BASE64=eyJ0eXAiOiJKV1QiLCJh...  # base64 JSON
+
+NODE_ENV=production
 ```
 
-For robust, **production-ready deployments** with automated CI/CD, please follow the detailed instructions in the **[Agent Starter Pack Development Guide](https://googlecloudplatform.github.io/agent-starter-pack/guide/development-guide.html#b-production-ready-deployment-with-ci-cd)**.
-## Agent Details
+Cloud Run (if you host your own proxy backend):
 
-| Attribute | Description |
-| :--- | :--- |
-| **Interaction Type** | Workflow |
-| **Complexity** | Advanced |
-| **Agent Type** | Multi Agent |
-| **Components** | Multi-agent, Function calling, Web search, React frontend, Human-in-the-Loop |
-| **Vertical** | Horizontal |
+```bash
+CLOUD_RUN_SERVICE_URL=https://your-service-url.a.run.app
+NODE_ENV=production
+```
 
-## How the Agent Thinks: A Two-Phase Workflow
+The frontend auto-detects the deployment mode in `nextjs/src/lib/config.ts` and will:
 
-The backend agent, defined in `app/agent.py`, follows a sophisticated workflow to move from a simple topic to a fully-researched report.
+- Use Agent Engine when `AGENT_ENGINE_ENDPOINT` is set
+- Use Cloud Run when `CLOUD_RUN_SERVICE_URL` (or Cloud env vars) are present
+- Default to local backend otherwise
 
-The following diagram illustrates the agent's architecture and workflow:
+### Run the frontend (dev)
 
-![ADK Gemini Fullstack Architecture](https://github.com/GoogleCloudPlatform/agent-starter-pack/blob/main/docs/images/adk_gemini_fullstack_architecture.png?raw=true)
+```bash
+npm --prefix nextjs install
+npm --prefix nextjs run dev
+```
 
-This process is broken into two main phases:
+Open `http://localhost:3000`.
 
-### Phase 1: Plan & Refine (Human-in-the-Loop)
+## Streaming Architecture
 
-This is the collaborative brainstorming phase.
+- API route `nextjs/src/app/api/run_sse/route.ts` orchestrates streaming and delegates to:
+  - `run-sse-local-backend-handler.ts` for local ADK backend
+  - `run-sse-agent-engine-handler.ts` when using Agent Engine
+- For Agent Engine, JSON fragments are transformed into SSE format on the server so the UI can render incremental `text` and `thought` parts consistently.
 
-1.  **You provide a research topic.**
-2.  The agent generates a high-level research plan with several key goals (e.g., "Analyze the market impact," "Identify key competitors").
-3.  The plan is presented to **you**. You can approve it, or chat with the agent to add, remove, or change goals until you're satisfied. Nothing happens without your explicit approval.
+## Lint, Type-Check, and Tests
 
-The plan will contains following tags as a signal to downstream agents,
-  - Research Plan Tags
+Python (from repo root):
 
-    - [RESEARCH]: Guides info gathering via search.
-    - [DELIVERABLE]: Guides creation of final outputs (e.g., tables, reports).
-  
-  - Plan Refinement Tags
+```bash
+make lint
+```
 
-    - [MODIFIED]: Goal was updated.
-    - [NEW]: New goal added per user.
-    - [IMPLIED]: Deliverable proactively added by AI.
+Node/TypeScript (from repo root):
 
-### Phase 2: Execute Autonomous Research
+```bash
+npm --prefix nextjs run lint
+npm --prefix nextjs run test
+```
 
-Once you approve the plan, the agent's `research_pipeline` takes over and works autonomously.
+Tip: Prefer linting and type-checking for fast feedback during development instead of full builds.
 
-1.  **Outlining:** It first converts the approved plan into a structured report outline (like a table of contents).
-2.  **Iterative Research & Critique Loop:** For each section of the outline, it repeats a cycle:
-    *   **Search:** It performs web searches to gather information.
-    *   **Critique:** A "critic" model evaluates the findings for gaps or weaknesses.
-    *   **Refine:** If the critique finds weaknesses, the agent generates more specific follow-up questions and searches again. This loop continues until the research meets a high-quality bar.
-3.  **Compose Final Report:** After the research loop is complete, a final agent takes all the verified findings and writes a polished report, automatically adding inline citations that link back to the original sources.
+## Deployments
 
-You can edit key parameters (Gemini models, research loop iterations) in the `ResearchConfiguration` dataclass within `app/config.py`.
+### Deploy the Agent to Vertex AI Agent Engine
 
-## Customization
+Prerequisites:
 
-You can modify and extend this agent's behavior by editing the backend code.
+- `gcloud auth application-default login`
+- `gcloud config set project YOUR_PROJECT_ID`
+- A GCS bucket for packaging (match `GOOGLE_CLOUD_STAGING_BUCKET` in `app/.env`)
 
-*   **Modifying Agent Logic:** The core logic for all sub-agents (planner, researcher, critic, composer) is defined in `app/agent.py`. You can change the prompts, tools, or reasoning steps by modifying the agent definitions here.
-*   **Adjusting Research Parameters:** Key parameters, such as the Gemini models used or the number of research loop iterations, can be adjusted in the `ResearchConfiguration` dataclass within `app/config.py`.
-*   **Syncing with Frontend:** The frontend UI integrates with the backend through specific agent names that process outputs differently (e.g., research findings vs. final report), update the activity timeline with appropriate titles/icons, and track research metrics like website counts. 
-    Important agent names include:
-    * `section_researcher` & `enhanced_search_executor` - track websites consulted
-    * `report_composer_with_citations` - processes final report
-    * `interactive_planner_agent` - updates AI messages during planning
-    * `plan_generator` and `section_planner` - used for timeline labels
-    
-    If you rename agents in `app/agent.py`, you must update their names in the frontend code (`/ui`) to maintain functionality.
+Deploy:
 
+```bash
+make deploy-adk
+```
 
-### Example Interaction
+What it does:
 
-> **User:** A report on the last Google I/O
->
-> **Agent:** Here's a research plan for a report on the last Google I/O:
->
-> *   Analyze the key announcements and product updates made at Google I/O 2025.
-> *   Identify the central themes and strategic directions emphasized by Google during the event, particularly concerning AI, Android, and other emerging technologies like Android XR.
-> *   Investigate the reception and industry impact of the major product unveilings and feature enhancements.
-> *   Examine any significant shifts or continuities in Google's developer strategy as presented at the conference.
-> *   Assess the implications of the announced technologies and initiatives for developers, consumers, and the broader tech landscape.
->
-> Does this plan look good, or would you like to refine it further? Once approved, I can initiate the research.
->
-> **User:** Looks good!
-> *(The agent proceeds to autonomously execute the research, showing its progress on the timeline.)*
->
-> **Agent:**
-> 
-> Google I/O 2025: Key Announcements and Highlights
-> ....
+- Exports Python dependencies to `.requirements.txt` using uv
+- Packages and deploys the ADK app via `app/agent_engine_app.py`
+- Creates a logs/data bucket for artifacts if missing
+- Outputs deployment metadata to `logs/deployment_metadata.json`
+
+After deployment, set `AGENT_ENGINE_ENDPOINT` in `nextjs/.env.local` with the returned Reasoning Engine endpoint to stream from Agent Engine directly.
+
+### Deploy the Frontend (Vercel)
+
+Use `NEXTJS_VERCEL_DEPLOYMENT_GUIDE.md` for step-by-step instructions. In short:
+
+- Set environment variables in Vercel (at minimum `AGENT_ENGINE_ENDPOINT` and `GOOGLE_SERVICE_ACCOUNT_KEY_BASE64` if using Agent Engine)
+- Push your repo and import the `nextjs` app into Vercel
+
+## Health Checks
+
+`GET /api/health` on the frontend forwards to the backend health endpoint (`/health`). Configure backend URL/endpoint via env as described above.
 
 ## Troubleshooting
 
-If you encounter issues while setting up or running this agent, here are some resources to help you troubleshoot:
-- [ADK Documentation](https://google.github.io/adk-docs/): Comprehensive documentation for the Agent Development Kit
-- [Vertex AI Authentication Guide](https://cloud.google.com/vertex-ai/docs/authentication): Detailed instructions for setting up authentication
-- [Agent Starter Pack Troubleshooting](https://googlecloudplatform.github.io/agent-starter-pack/guide/troubleshooting.html): Common issues
+- Missing Google Cloud envs: `app/config.py` validates env on import. Ensure `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, and `GOOGLE_CLOUD_STAGING_BUCKET` are set in `app/.env`.
+- Authentication for Agent Engine from the frontend requires `GOOGLE_SERVICE_ACCOUNT_KEY_BASE64` with correct scopes.
+- Local streaming issues: verify `BACKEND_URL` in `nextjs/.env.local` and that `make dev-backend` is running.
 
+## License
 
-## 🛠️ Technologies Used
-
-### Backend
-*   [**Agent Development Kit (ADK)**](https://github.com/google/adk-python): The core framework for building the stateful, multi-turn agent.
-*   [**FastAPI**](https://fastapi.tiangolo.com/): High-performance web framework for the backend API.
-*   [**Google Gemini**](https://cloud.google.com/vertex-ai/generative-ai/docs): Used for planning, reasoning, search query generation, and final synthesis.
-
-### Frontend
-*   [**React**](https://reactjs.org/) (with [Vite](https://vitejs.dev/)): For building the interactive user interface.
-*   [**Tailwind CSS**](https://tailwindcss.com/): For utility-first styling.
-*   [**Shadcn UI**](https://ui.shadcn.com/): A set of beautifully designed, accessible components.
-
-## Disclaimer
-
-This agent sample is provided for illustrative purposes only. It serves as a basic example of an agent and a foundational starting point for individuals or teams to develop their own agents.
-
-Users are solely responsible for any further development, testing, security hardening, and deployment of agents based on this sample. We recommend thorough review, testing, and the implementation of appropriate safeguards before using any derived agent in a live or critical system.
+Apache-2.0 (unless noted otherwise in third-party files).
