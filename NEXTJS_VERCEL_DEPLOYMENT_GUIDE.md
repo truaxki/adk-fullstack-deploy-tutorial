@@ -23,13 +23,7 @@ The frontend automatically detects which backend type to use based on available 
 
 **Required Variables:**
 ```bash
-# Google Cloud Configuration
-GOOGLE_CLOUD_PROJECT=your-project-id
-REASONING_ENGINE_ID=your-reasoning-engine-id
-GOOGLE_SERVICE_ACCOUNT_KEY_BASE64=your-base64-encoded-service-account-key
-ADK_APP_NAME=your-adk-app-name
-AGENT_ENGINE_ENDPOINT=your-agent-engine-endpoint
-GOOGLE_CLOUD_LOCATION=us-central1
+# Google
 ```
 
 **How to get these values:**
