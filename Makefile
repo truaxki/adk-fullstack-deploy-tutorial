@@ -1,6 +1,7 @@
 install:
-	@command -v uv >/dev/null 2>&1 || { echo "uv is not installed. Installing uv..."; curl -LsSf https://astral.sh/uv/0.6.12/install.sh | sh; source $HOME/.local/bin/env; }
-	uv sync && npm --prefix nextjs install
+	@where uv >nul 2>&1 || (echo uv is not installed. Installing uv... && curl -LsSf https://astral.sh/uv/0.6.12/install.sh | sh)
+	uv sync
+	cd nextjs && npm install
 
 dev:
 	make dev-backend & make dev-frontend
@@ -9,7 +10,7 @@ dev-backend:
 	uv run adk api_server app --allow_origins="*"
 
 dev-frontend:
-	npm --prefix nextjs run dev
+	cd nextjs && npm run dev
 
 adk-web:
 	uv run adk web --port 8501
@@ -22,6 +23,4 @@ lint:
 
 # Deploy the agent remotely
 deploy-adk:
-	# Export dependencies to requirements file using uv export.
-	uv export --no-hashes --no-header --no-dev --no-emit-project --no-annotate > .requirements.txt 2>/dev/null || \
 	uv export --no-hashes --no-header --no-dev --no-emit-project > .requirements.txt && uv run app/agent_engine_app.py

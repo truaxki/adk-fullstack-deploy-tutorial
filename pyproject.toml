@@ -9,6 +9,7 @@ authors = [
     {name = "Erwin Huizenga", email = "erwinh@google.com"},
     {name = "Lavi Nigam", email = "lavinigam@google.com"},
     {name = "Brandon Hancock", email = "brandon@brandonhancock.io"},
+    {name = "Kirk Truax", email = "kirk@agentlocker.io"}
 ]
 dependencies = [
     "google-adk==1.6.1",
