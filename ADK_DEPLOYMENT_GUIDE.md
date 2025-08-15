@@ -95,13 +95,13 @@ cp app/.env.example app/.env
 
 Before deploying your agent, verify you have completed:
 
-- [ ] **Google Cloud Project** - Created or selected project
-- [ ] **APIs Enabled** - All 5 required APIs enabled (Vertex AI, Cloud Storage, Cloud Build, Cloud Run, Artifact Registry)
-- [ ] **Billing Setup** - Billing account linked to project
-- [ ] **Storage Bucket** - Created staging bucket in same region as deployment
-- [ ] **Google Cloud CLI** - Installed and authenticated (`gcloud auth application-default login`)
-- [ ] **Default Project** - Set with `gcloud config set project PROJECT_ID`
-- [ ] **Environment File** - Created `.env.example` (if needed) and copied to `.env` with all values filled in
+- [x] **Google Cloud Project** - Created or selected project
+- [x] **APIs Enabled** - All 5 required APIs enabled (Vertex AI, Cloud Storage, Cloud Build, Cloud Run, Artifact Registry)
+- [x] **Billing Setup** - Billing account linked to project
+- [x] **Storage Bucket** - Created staging bucket in same region as deployment
+- [x] **Google Cloud CLI** - Installed and authenticated (`gcloud auth application-default login`)
+- [x] **Default Project** - Set with `gcloud config set project PROJECT_ID`
+- [x] **Environment File** - Created `.env.example` (if needed) and copied to `.env` with all values filled in
 - [ ] **Dependencies** - `pyproject.toml` contains all required ADK dependencies  
 - [ ] **Agent Code** - Follows required ADK structure (see below)
 
