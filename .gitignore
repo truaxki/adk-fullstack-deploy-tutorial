@@ -78,6 +78,11 @@ nextjs/build/
 # Environment variables
 .env
 
+# Google Cloud credentials
+gcloud-key.json
+*.json.key
+service-account-*.json
+
 # Logs
 logs/
 logs
