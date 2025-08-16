@@ -1,15 +1,13 @@
-import { Suspense } from "react";
-import { ChatProvider } from "@/components/chat/ChatProvider";
-import { ChatContainer } from "@/components/chat/ChatContainer";
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 
-export default function HomePage(): React.JSX.Element {
-  return (
-    <div className="flex flex-col h-screen">
-      <Suspense fallback={<div>Loading chat...</div>}>
-        <ChatProvider>
-          <ChatContainer />
-        </ChatProvider>
-      </Suspense>
-    </div>
-  );
+export default async function HomePage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (user) {
+    redirect('/chat')
+  } else {
+    redirect('/auth')
+  }
 }
