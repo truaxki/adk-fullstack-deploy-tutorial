@@ -3,6 +3,7 @@
 import { Bot } from "lucide-react";
 import { UserIdInput } from "@/components/chat/UserIdInput";
 import { SessionSelector } from "@/components/chat/SessionSelector";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { useChatContext } from "@/components/chat/ChatProvider";
 
 /**
@@ -38,6 +39,9 @@ export function ChatHeader(): React.JSX.Element {
 
         {/* Right side - User controls */}
         <div className="flex items-center gap-4">
+          {/* Supabase User Menu */}
+          <UserMenu />
+
           {/* User ID Management */}
           <UserIdInput
             currentUserId={userId}

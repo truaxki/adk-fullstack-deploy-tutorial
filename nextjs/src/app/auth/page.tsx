@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { ClearTokensButton } from '@/components/auth/ClearTokensButton'
 
 type AuthMode = 'signin' | 'signup' | 'reset'
 
@@ -39,9 +40,15 @@ function AuthForm() {
   // Check if user is already authenticated
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        router.push('/chat')
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          router.push('/chat')
+        }
+      } catch (error) {
+        console.warn('Auth check failed, likely due to corrupted tokens:', error)
+        // If auth check fails, user can still use the auth form
+        // The clearAuthTokens function will handle cleanup if needed
       }
     }
     checkUser()
@@ -318,6 +325,13 @@ function AuthForm() {
             </button>
           </div>
         </form>
+        
+        {/* Debug Token Clear - Only show in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-6 text-center">
+            <ClearTokensButton />
+          </div>
+        )}
       </div>
     </div>
   )
