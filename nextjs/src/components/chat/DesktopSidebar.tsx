@@ -122,6 +122,7 @@ export function DesktopSidebar({
   };
 
   const handleChatSelect = (chatId: string) => {
+    console.log('[DesktopSidebar] Selecting session:', chatId);
     handleSessionSwitch(chatId);
     onChatSelect?.(chatId);
   };
