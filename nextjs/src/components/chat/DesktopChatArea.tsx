@@ -5,6 +5,7 @@ import { useChatContext } from "@/components/chat/ChatProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { SessionHistory } from "@/components/chat/SessionHistory";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
 
 export function DesktopChatArea(): React.JSX.Element {
   const { 
@@ -12,7 +13,8 @@ export function DesktopChatArea(): React.JSX.Element {
     userId, 
     sessionId,
     isLoadingHistory,
-    messageEvents  // Add this
+    messageEvents,  // Already added in Phase 3
+    isLoading       // Add this for streaming state
   } = useChatContext();
 
 
