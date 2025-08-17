@@ -343,8 +343,8 @@ export function ChatProvider({
         };
         addMessage(userMessage);
 
-        // Submit message for streaming - the backend will provide AI response
-        await streamingManager.submitMessage(query);
+        // Submit message for streaming using the current session ID - the backend will provide AI response
+        await streamingManager.submitMessage(query, currentUserId, currentSessionId);
       } catch (error) {
         console.error("Error submitting message:", error);
         // Don't create fake error messages - let the UI handle the error state
