@@ -14,7 +14,7 @@ export interface UseSessionReturn {
 
   // Session management
   handleSessionSwitch: (newSessionId: string) => void;
-  handleCreateNewSession: (sessionUserId: string) => Promise<void>;
+  handleCreateNewSession: (sessionUserId: string) => Promise<string>;
 }
 
 /**
@@ -50,7 +50,7 @@ export function useSession(): UseSessionReturn {
 
   // Handle new session creation
   const handleCreateNewSession = useCallback(
-    async (sessionUserId: string): Promise<void> => {
+    async (sessionUserId: string): Promise<string> => {
       if (!sessionUserId) {
         throw new Error("User ID is required to create a session");
       }
@@ -91,6 +91,8 @@ export function useSession(): UseSessionReturn {
 
       console.log(`🔄 Switching to new session: ${actualSessionId}`);
       handleSessionSwitch(actualSessionId);
+      
+      return actualSessionId;
     },
     [handleSessionSwitch]
   );

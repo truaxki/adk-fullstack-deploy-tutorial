@@ -25,6 +25,16 @@ export function DesktopChatArea(): React.JSX.Element {
     scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Debug session state
+  useEffect(() => {
+    console.log('[DesktopChatArea] Session state:', {
+      userId,
+      sessionId,
+      hasMessages: messages.length > 0,
+      isLoadingHistory
+    });
+  }, [userId, sessionId, messages.length, isLoadingHistory]);
+
 
   return (
     <div className="flex-1 flex flex-col h-full bg-gray-50">

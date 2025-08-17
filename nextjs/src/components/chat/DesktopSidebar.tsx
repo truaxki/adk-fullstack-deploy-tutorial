@@ -139,14 +139,17 @@ export function DesktopSidebar({
     setIsCreatingSession(true);
     
     try {
-      await handleCreateNewSession(user.id);
+      const newSessionId = await handleCreateNewSession(user.id);
       
+      // Refresh the session list to show the new session
       const result = await fetchActiveSessionsAction(user.id);
       
-      if (result.success && result.sessions.length > 0) {
-        const newSession = result.sessions[0];
+      if (result.success) {
         setSessions(result.sessions);
-        handleSessionSwitch(newSession.id);
+        // The session was already switched by handleCreateNewSession, but ensure it's selected
+        if (newSessionId) {
+          handleSessionSwitch(newSessionId);
+        }
       } else {
         throw new Error('Failed to fetch updated sessions');
       }

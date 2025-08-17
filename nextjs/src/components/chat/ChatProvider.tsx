@@ -325,12 +325,13 @@ export function ChatProvider({
 
       try {
         // Use provided session ID or current state
-        const currentSessionId = requestSessionId || sessionId;
+        let currentSessionId = requestSessionId || sessionId;
 
+        // Auto-create session if none exists
         if (!currentSessionId) {
-          throw new Error(
-            "No session available. Please create a session first."
-          );
+          console.log('[ChatProvider] No session available, creating new session...');
+          currentSessionId = await handleCreateNewSession(currentUserId);
+          console.log('[ChatProvider] Auto-created session:', currentSessionId);
         }
 
         // Add user message to chat immediately
