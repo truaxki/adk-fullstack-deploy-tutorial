@@ -55,6 +55,7 @@ export function DesktopSidebar({
   const [activeTab, setActiveTab] = useState<"research" | "chat">("chat");
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   
   const router = useRouter();
@@ -134,12 +135,16 @@ export function DesktopSidebar({
       return;
     }
     
+    setIsCreatingSession(true);
+    
     try {
       await handleCreateNewSession(user.id);
       console.log('[DesktopSidebar] New session created successfully');
       onNewChat?.();
     } catch (error) {
       console.error('[DesktopSidebar] Failed to create session:', error);
+    } finally {
+      setIsCreatingSession(false);
     }
   };
 
@@ -247,11 +252,20 @@ export function DesktopSidebar({
         {/* New Chat Button */}
         <button
           onClick={handleNewChat}
-          disabled={!user}
+          disabled={isCreatingSession || !user}
           className="w-full flex items-center gap-3 p-2 rounded-lg transition-colors mb-4 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 hover:bg-gray-100 disabled:hover:bg-transparent"
         >
-          <Plus className="w-4 h-4" />
-          <span className="text-sm font-medium">New Chat</span>
+          {isCreatingSession ? (
+            <>
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-medium">Creating...</span>
+            </>
+          ) : (
+            <>
+              <Plus className="w-4 h-4" />
+              <span className="text-sm font-medium">New Chat</span>
+            </>
+          )}
         </button>
 
         {/* Sessions List */}
