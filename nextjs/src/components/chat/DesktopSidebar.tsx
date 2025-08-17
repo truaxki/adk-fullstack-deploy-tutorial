@@ -56,6 +56,7 @@ export function DesktopSidebar({
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   
   const router = useRouter();
@@ -129,37 +130,32 @@ export function DesktopSidebar({
 
   const handleNewChat = async () => {
     console.log('[DesktopSidebar] Creating new chat for user:', user?.id);
+    setSessionError(null);
     
     if (!user?.id) {
-      console.error('[DesktopSidebar] Cannot create chat: No user ID');
+      setSessionError('Please set a User ID first');
       return;
     }
     
     setIsCreatingSession(true);
     
     try {
-      // Create the new session
       await handleCreateNewSession(user.id);
-      console.log('[DesktopSidebar] New session created');
       
-      // Refresh the session list
       const result = await fetchActiveSessionsAction(user.id);
       
       if (result.success && result.sessions.length > 0) {
-        // Get the most recent session (first in list)
         const newSession = result.sessions[0];
-        console.log('[DesktopSidebar] Selecting new session:', newSession.id);
-        
-        // Update local state
         setSessions(result.sessions);
-        
-        // Select the new session
         handleSessionSwitch(newSession.id);
+      } else {
+        throw new Error('Failed to fetch updated sessions');
       }
       
       onNewChat?.();
     } catch (error) {
       console.error('[DesktopSidebar] Failed to create session:', error);
+      setSessionError('Failed to create new chat. Please try again.');
     } finally {
       setIsCreatingSession(false);
     }
@@ -284,6 +280,13 @@ export function DesktopSidebar({
             </>
           )}
         </button>
+
+        {/* Error Message */}
+        {sessionError && (
+          <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600">
+            {sessionError}
+          </div>
+        )}
 
         {/* Sessions List */}
         <div className="space-y-1">
