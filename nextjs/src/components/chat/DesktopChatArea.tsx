@@ -94,6 +94,15 @@ export function DesktopChatArea(): React.JSX.Element {
               ) : (
                 <div className="max-w-4xl mx-auto">
                   <MessageList />
+                  {/* Streaming indicator */}
+                  {isLoading && (
+                    <div className="mt-4 flex items-center gap-2 text-gray-500">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-75" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse delay-150" />
+                      <span className="text-sm ml-2">AI is thinking...</span>
+                    </div>
+                  )}
                 </div>
               )}
             </>
