@@ -6,7 +6,12 @@ import { MessageList } from "@/components/chat/MessageList";
 import { SessionHistory } from "@/components/chat/SessionHistory";
 
 export function DesktopChatArea(): React.JSX.Element {
-  const { messages, userId, sessionId } = useChatContext();
+  const { 
+    messages, 
+    userId, 
+    sessionId,
+    isLoadingHistory  // Add this
+  } = useChatContext();
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
@@ -22,18 +27,32 @@ export function DesktopChatArea(): React.JSX.Element {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6">
-        {!sessionId ? (
-          <div className="text-center text-gray-500">
-            Select a session to view messages
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center text-gray-500">
-            No messages yet in this session
-          </div>
-        ) : (
-          <div className="text-center text-gray-500">
-            {messages.length} message(s) in this session
-          </div>
+        {/* Loading State */}
+        <SessionHistory
+          isLoadingHistory={isLoadingHistory}
+          hasMessages={messages.length > 0}
+          sessionId={sessionId}
+          userId={userId}
+          error={null}
+        />
+
+        {/* Message Display */}
+        {!isLoadingHistory && (
+          <>
+            {!sessionId ? (
+              <div className="text-center text-gray-500">
+                Select a session to view messages
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="text-center text-gray-500">
+                No messages yet in this session
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">
+                {messages.length} message(s) ready to display
+              </div>
+            )}
+          </>
         )}
       </div>
 
