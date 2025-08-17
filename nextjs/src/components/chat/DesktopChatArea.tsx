@@ -96,7 +96,9 @@ export function DesktopChatArea(): React.JSX.Element {
                       </svg>
                     </div>
                     <p className="text-gray-500">Start a new conversation</p>
-                    <p className="text-sm text-gray-400 mt-2">Type a message below to begin</p>
+                    <p className="text-sm text-gray-400 mt-2">
+                      Type a message below or press Enter to send
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -119,9 +121,11 @@ export function DesktopChatArea(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Input Area - Real Implementation */}
-      <div className="bg-white border-t border-gray-200">
-        <ChatInput />
+      {/* Input Area with better styling */}
+      <div className="bg-white border-t border-gray-200 shadow-lg">
+        <div className="max-w-4xl mx-auto">
+          <ChatInput />
+        </div>
       </div>
     </div>
   );
