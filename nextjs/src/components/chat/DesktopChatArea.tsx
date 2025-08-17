@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { useChatContext } from "@/components/chat/ChatProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { SessionHistory } from "@/components/chat/SessionHistory";
+import { ChatInput } from "@/components/chat/ChatInput";
 
 export function DesktopChatArea(): React.JSX.Element {
   const { 
