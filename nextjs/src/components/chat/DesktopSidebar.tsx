@@ -127,9 +127,19 @@ export function DesktopSidebar({
   };
 
   const handleNewChat = async () => {
-    if (user?.id) {
+    console.log('[DesktopSidebar] Creating new chat for user:', user?.id);
+    
+    if (!user?.id) {
+      console.error('[DesktopSidebar] Cannot create chat: No user ID');
+      return;
+    }
+    
+    try {
       await handleCreateNewSession(user.id);
+      console.log('[DesktopSidebar] New session created successfully');
       onNewChat?.();
+    } catch (error) {
+      console.error('[DesktopSidebar] Failed to create session:', error);
     }
   };
 
