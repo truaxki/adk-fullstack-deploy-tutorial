@@ -113,7 +113,11 @@ export function DesktopChatArea(): React.JSX.Element {
                 </div>
               ) : (
                 <div className="max-w-4xl mx-auto">
-                  <MessageList />
+                  <MessageList 
+                    messages={messages}
+                    messageEvents={messageEvents}
+                    isLoading={isLoading}
+                  />
                   {/* Streaming indicator */}
                   {isLoading && (
                     <div className="mt-4 flex items-center gap-2 text-gray-500">
