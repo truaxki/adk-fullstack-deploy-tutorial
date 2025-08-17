@@ -10,10 +10,15 @@ import {
   MoreHorizontal,
   Star,
   Sparkles,
-  Plus
+  Plus,
+  User,
+  LogOut
 } from "lucide-react";
 import { useChatContext } from "@/components/chat/ChatProvider";
 import { fetchActiveSessionsAction } from "@/lib/actions/session-list-actions";
+import { createClient } from '@/lib/supabase/client';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 
 interface ActiveSession {
   id: string;
@@ -50,6 +55,10 @@ export function DesktopSidebar({
   const [activeTab, setActiveTab] = useState<"research" | "chat">("chat");
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  
+  const router = useRouter();
+  const supabase = createClient();
   
   // Get session context from ChatProvider
   const {
@@ -59,13 +68,32 @@ export function DesktopSidebar({
     handleCreateNewSession
   } = useChatContext();
 
-  // Fetch active sessions
+  // Get authenticated user
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    
+    getUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // Fetch active sessions for authenticated user
   const fetchSessions = useCallback(async () => {
-    if (!userId) return;
+    if (!user?.id) return;
     
     try {
       setIsLoadingSessions(true);
-      const result = await fetchActiveSessionsAction(userId);
+      const result = await fetchActiveSessionsAction(user.id);
       
       if (result.success) {
         setSessions(result.sessions);
@@ -77,12 +105,16 @@ export function DesktopSidebar({
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [userId]);
+  }, [user?.id]);
 
-  // Load sessions when userId changes
+  // Load sessions when user changes
   useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+    if (user) {
+      fetchSessions();
+    } else {
+      setSessions([]);
+    }
+  }, [user, fetchSessions]);
 
   const handleTabChange = (tab: "research" | "chat") => {
     setActiveTab(tab);
@@ -95,10 +127,15 @@ export function DesktopSidebar({
   };
 
   const handleNewChat = async () => {
-    if (userId) {
-      await handleCreateNewSession(userId);
+    if (user?.id) {
+      await handleCreateNewSession(user.id);
       onNewChat?.();
     }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/auth');
   };
 
   return (
@@ -112,6 +149,39 @@ export function DesktopSidebar({
           <span className="font-semibold text-gray-900">AgentLocker</span>
         </div>
       </div>
+
+      {/* User Section */}
+      {user ? (
+        <div className="px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-gray-500" />
+              <div>
+                <div className="text-xs text-gray-500">Signed in as</div>
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {user.email}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="p-1 rounded hover:bg-gray-100 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-3 h-3 text-gray-500" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="px-4 py-3 border-b border-gray-200">
+          <button
+            onClick={() => router.push('/auth')}
+            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+          >
+            Sign in to continue
+          </button>
+        </div>
+      )}
 
       {/* Tabs Section */}
       <div className="p-4 border-b border-gray-200">
@@ -167,7 +237,8 @@ export function DesktopSidebar({
         {/* New Chat Button */}
         <button
           onClick={handleNewChat}
-          className="w-full flex items-center gap-3 p-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors mb-4"
+          disabled={!user}
+          className="w-full flex items-center gap-3 p-2 rounded-lg transition-colors mb-4 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 hover:bg-gray-100 disabled:hover:bg-transparent"
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm font-medium">New Chat</span>

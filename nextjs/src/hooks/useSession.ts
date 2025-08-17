@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
+import { createClient } from '@/lib/supabase/client';
+import { User } from '@supabase/supabase-js';
 
 export interface UseSessionReturn {
   // State
   sessionId: string;
   userId: string;
+  user: User | null;
 
   // User ID management
   handleUserIdChange: (newUserId: string) => void;
@@ -15,11 +18,14 @@ export interface UseSessionReturn {
 }
 
 /**
- * Custom hook for managing chat sessions and user ID (no localStorage persistence)
+ * Custom hook for managing chat sessions with Supabase authentication
  */
 export function useSession(): UseSessionReturn {
   const [sessionId, setSessionId] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
+  const [user, setUser] = useState<User | null>(null);
+  
+  const supabase = createClient();
 
   // Handle session switching
   const handleSessionSwitch = useCallback(
@@ -101,18 +107,50 @@ export function useSession(): UseSessionReturn {
     localStorage.setItem("agent-engine-user-id", confirmedUserId);
   }, []);
 
-  // Load user ID from localStorage on mount (but no session persistence)
+  // Supabase authentication integration
   useEffect(() => {
-    const savedUserId = localStorage.getItem("agent-engine-user-id");
-    if (savedUserId) {
-      setUserId(savedUserId);
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (user?.id) {
+        setUserId(user.id);
+      }
+    };
+    
+    getUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        const authUser = session?.user ?? null;
+        setUser(authUser);
+        if (authUser?.id) {
+          setUserId(authUser.id);
+        } else {
+          setUserId("");
+          setSessionId(""); // Clear session when user signs out
+        }
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // Fallback: Load user ID from localStorage for backward compatibility
+  useEffect(() => {
+    if (!user) {
+      const savedUserId = localStorage.getItem("agent-engine-user-id");
+      if (savedUserId) {
+        setUserId(savedUserId);
+      }
     }
-  }, []);
+  }, [user]);
 
   return {
     // State
     sessionId,
     userId,
+    user,
 
     // User ID management
     handleUserIdChange,

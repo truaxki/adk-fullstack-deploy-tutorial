@@ -22,6 +22,7 @@ export interface ChatContextValue {
   // Session state
   userId: string;
   sessionId: string;
+  user: import('@supabase/supabase-js').User | null;
 
   // Message state
   messages: Message[];
@@ -74,6 +75,7 @@ export function ChatProvider({
   const {
     userId,
     sessionId,
+    user,
     handleUserIdChange,
     handleUserIdConfirm,
     handleCreateNewSession,
@@ -356,6 +358,7 @@ export function ChatProvider({
     // Session state
     userId,
     sessionId,
+    user,
 
     // Message state
     messages,
