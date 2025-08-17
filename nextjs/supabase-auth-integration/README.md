@@ -561,11 +561,23 @@ await streamingManager.submitMessage(query, userId, newSessionId);
 Server Action "402b5397d4efc8ae6e932e08725bcd1e72eec1ef1f" was not found on the server
 ```
 
-**Root Cause**: Next.js 15 hot reloading doesn't properly sync server action hashes when making significant changes to server components.
+**Root Cause**: According to [official Next.js documentation](https://nextjs.org/docs/messages/failed-to-find-server-action), this is a security-related error involving encrypted keys for Server Actions. Each server instance may generate different encryption keys between builds, causing inconsistencies.
 
-**Solution**: Regular server restarts with cache clearing
+**Immediate Solution**: Regular server restarts with cache clearing
 ```bash
 rm -rf .next && npm run dev
+```
+
+**Permanent Solution**: Set a persistent encryption key using environment variable
+```bash
+# Add to .env.local
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=your-32-character-key-here
+```
+
+**Generate a proper encryption key**:
+```bash
+# Generate AES-256 key (32 bytes = 64 hex characters)
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 #### 4. Context Provider Chain Issues
@@ -710,9 +722,12 @@ export function ChatErrorBoundary({ children }: { children: React.ReactNode }) {
 ### Development Best Practices
 
 **For Server Actions**:
+- Set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` in `.env.local` for consistent encryption
 - Restart dev server after significant changes
 - Clear `.next` cache when encountering hash mismatches
 - Test server actions in isolation before integration
+- Generate proper AES-256 encryption keys (64 hex characters)
+- Never commit encryption keys to version control
 
 **For State Management**:
 - Avoid state updates in async operations without proper handling
