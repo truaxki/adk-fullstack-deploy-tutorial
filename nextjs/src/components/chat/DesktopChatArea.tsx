@@ -64,14 +64,20 @@ export function DesktopChatArea(): React.JSX.Element {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                       </svg>
                     </div>
-                    <p className="text-gray-500">Select a session to view messages</p>
+                    <p className="text-gray-500">Select a session from the sidebar</p>
+                    <p className="text-sm text-gray-400 mt-2">Or create a new chat to get started</p>
                   </div>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <p className="text-gray-500">No messages yet in this session</p>
-                    <p className="text-sm text-gray-400 mt-2">Send a message to get started</p>
+                    <div className="text-gray-400 mb-2">
+                      <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-500">Start a new conversation</p>
+                    <p className="text-sm text-gray-400 mt-2">Type a message below to begin</p>
                   </div>
                 </div>
               ) : (
