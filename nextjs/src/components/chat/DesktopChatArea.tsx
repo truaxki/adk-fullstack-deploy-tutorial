@@ -99,13 +99,9 @@ export function DesktopChatArea(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Input Area - Placeholder */}
-      <div className="bg-white border-t border-gray-200 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-gray-100 rounded-lg p-3 text-center text-gray-500 text-sm">
-            Message input will be added in Phase 5
-          </div>
-        </div>
+      {/* Input Area - Real Implementation */}
+      <div className="bg-white border-t border-gray-200">
+        <ChatInput />
       </div>
     </div>
   );
