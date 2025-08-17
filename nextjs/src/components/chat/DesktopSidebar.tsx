@@ -140,11 +140,22 @@ export function DesktopSidebar({
     try {
       // Create the new session
       await handleCreateNewSession(user.id);
-      console.log('[DesktopSidebar] New session created successfully');
+      console.log('[DesktopSidebar] New session created');
       
       // Refresh the session list
-      await fetchSessions();
-      console.log('[DesktopSidebar] Session list refreshed');
+      const result = await fetchActiveSessionsAction(user.id);
+      
+      if (result.success && result.sessions.length > 0) {
+        // Get the most recent session (first in list)
+        const newSession = result.sessions[0];
+        console.log('[DesktopSidebar] Selecting new session:', newSession.id);
+        
+        // Update local state
+        setSessions(result.sessions);
+        
+        // Select the new session
+        handleSessionSwitch(newSession.id);
+      }
       
       onNewChat?.();
     } catch (error) {
