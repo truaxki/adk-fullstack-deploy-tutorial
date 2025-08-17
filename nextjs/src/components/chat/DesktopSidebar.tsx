@@ -138,8 +138,14 @@ export function DesktopSidebar({
     setIsCreatingSession(true);
     
     try {
+      // Create the new session
       await handleCreateNewSession(user.id);
       console.log('[DesktopSidebar] New session created successfully');
+      
+      // Refresh the session list
+      await fetchSessions();
+      console.log('[DesktopSidebar] Session list refreshed');
+      
       onNewChat?.();
     } catch (error) {
       console.error('[DesktopSidebar] Failed to create session:', error);
