@@ -2,6 +2,8 @@
 
 import React from "react";
 import { useChatContext } from "@/components/chat/ChatProvider";
+import { MessageList } from "@/components/chat/MessageList";
+import { SessionHistory } from "@/components/chat/SessionHistory";
 
 export function DesktopChatArea(): React.JSX.Element {
   const { messages, userId, sessionId } = useChatContext();
