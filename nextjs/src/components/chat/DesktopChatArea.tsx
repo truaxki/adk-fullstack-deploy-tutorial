@@ -48,8 +48,8 @@ export function DesktopChatArea(): React.JSX.Element {
                 No messages yet in this session
               </div>
             ) : (
-              <div className="text-center text-gray-500">
-                {messages.length} message(s) ready to display
+              <div className="max-w-4xl mx-auto">
+                <MessageList />
               </div>
             )}
           </>
