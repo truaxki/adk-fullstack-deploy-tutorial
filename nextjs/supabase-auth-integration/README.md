@@ -381,10 +381,18 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Site URL for OAuth callbacks
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
+# Next.js Server Actions (fixes hash mismatch errors)
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=your_64_character_hex_key_here
+
 # Existing ADK configuration
 ADK_APP_NAME=app
 # ... other existing env vars
 ```
+
+**For Vercel Deployment**:
+- **Recommended**: Enable Skew Protection in Vercel dashboard instead of manual key
+- **Alternative**: Add `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` to Vercel environment variables
+- **Critical**: Use the same key across all environments (dev, preview, production)
 
 ### Phase 8: Database Schema (Supabase)
 
@@ -579,6 +587,46 @@ NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=your-32-character-key-here
 # Generate AES-256 key (32 bytes = 64 hex characters)
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
+
+### Vercel Deployment Considerations
+
+When deploying to Vercel, there are **two approaches** for handling server action encryption:
+
+#### Option 1: Vercel Skew Protection (Recommended)
+Vercel provides built-in "Skew Protection" which maintains previous version assets and handles server action consistency automatically.
+
+**Setup in Vercel Dashboard**:
+1. Go to your project settings in Vercel
+2. Navigate to "Functions" → "Skew Protection"
+3. Enable "Skew Protection" for your project
+4. This automatically handles server action consistency across deployments
+
+**Benefits**:
+- No manual key management needed
+- Automatic handling of multiple deployment versions
+- Built-in rollback capability
+- Zero-downtime deployments
+
+#### Option 2: Manual Environment Variable (Advanced)
+If you need explicit control over the encryption key:
+
+**Setup in Vercel Dashboard**:
+1. Go to Project Settings → Environment Variables
+2. Add: `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
+3. Value: Your generated 64-character hex key
+4. Apply to: Production, Preview, and Development environments
+
+**Vercel CLI Method**:
+```bash
+# Set environment variable via CLI
+vercel env add NEXT_SERVER_ACTIONS_ENCRYPTION_KEY production
+# Paste your 64-character hex key when prompted
+
+# Pull environment variables to local
+vercel env pull .env.local
+```
+
+**⚠️ Important**: Use the **same encryption key** across all environments (dev, preview, production) to avoid inconsistencies.
 
 #### 4. Context Provider Chain Issues
 
