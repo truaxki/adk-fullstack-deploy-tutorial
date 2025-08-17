@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useChatContext } from "@/components/chat/ChatProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { SessionHistory } from "@/components/chat/SessionHistory";
@@ -16,6 +16,14 @@ export function DesktopChatArea(): React.JSX.Element {
     messageEvents,  // Already added in Phase 3
     isLoading       // Add this for streaming state
   } = useChatContext();
+
+  // Auto-scroll reference
+  const scrollEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
 
   return (
@@ -103,6 +111,7 @@ export function DesktopChatArea(): React.JSX.Element {
                       <span className="text-sm ml-2">AI is thinking...</span>
                     </div>
                   )}
+                  <div ref={scrollEndRef} />
                 </div>
               )}
             </>
