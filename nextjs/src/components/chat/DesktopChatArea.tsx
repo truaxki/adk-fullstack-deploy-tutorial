@@ -10,7 +10,8 @@ export function DesktopChatArea(): React.JSX.Element {
     messages, 
     userId, 
     sessionId,
-    isLoadingHistory  // Add this
+    isLoadingHistory,
+    messageEvents  // Add this
   } = useChatContext();
 
   // Monitor state changes for debugging
@@ -29,13 +30,26 @@ export function DesktopChatArea(): React.JSX.Element {
             <h2 className="text-lg font-semibold text-gray-900">
               Chat Session
             </h2>
-            <p className="text-sm text-gray-500">
-              {sessionId ? `ID: ${sessionId.substring(0, 8)}...` : "No session selected"}
-            </p>
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              {sessionId && (
+                <>
+                  <span>Session: {sessionId.substring(0, 8)}...</span>
+                  <span>•</span>
+                  <span>User: {userId || 'Not set'}</span>
+                </>
+              )}
+            </div>
           </div>
           {sessionId && (
-            <div className="text-sm text-gray-500">
-              {messages.length} messages
+            <div className="text-right">
+              <div className="text-sm font-medium text-gray-700">
+                {messages.length} messages
+              </div>
+              {messageEvents.size > 0 && (
+                <div className="text-xs text-gray-500">
+                  {messageEvents.size} events tracked
+                </div>
+              )}
             </div>
           )}
         </div>
