@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useChatContext } from "@/components/chat/ChatProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { SessionHistory } from "@/components/chat/SessionHistory";
@@ -12,6 +12,13 @@ export function DesktopChatArea(): React.JSX.Element {
     sessionId,
     isLoadingHistory  // Add this
   } = useChatContext();
+
+  // Monitor state changes for debugging
+  useEffect(() => {
+    console.log('[DesktopChatArea] Session changed:', sessionId);
+    console.log('[DesktopChatArea] Messages count:', messages.length);
+    console.log('[DesktopChatArea] Loading history:', isLoadingHistory);
+  }, [sessionId, messages.length, isLoadingHistory]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-gray-50">
