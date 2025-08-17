@@ -129,7 +129,6 @@ export function DesktopSidebar({
   };
 
   const handleNewChat = async () => {
-    console.log('[DesktopSidebar] Creating new chat for user:', user?.id);
     setSessionError(null);
     
     if (!user?.id) {
@@ -154,7 +153,7 @@ export function DesktopSidebar({
       
       onNewChat?.();
     } catch (error) {
-      console.error('[DesktopSidebar] Failed to create session:', error);
+      console.error('[DesktopSidebar] Session creation failed:', error);
       setSessionError('Failed to create new chat. Please try again.');
     } finally {
       setIsCreatingSession(false);
