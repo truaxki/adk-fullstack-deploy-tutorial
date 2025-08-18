@@ -3,6 +3,7 @@ import {
   getAuthHeaders,
   shouldUseAgentEngine,
 } from "@/lib/config";
+import { syncSessionMetadata } from "@/lib/utils/session-sync";
 
 /**
  * Gets the ADK app name from environment or defaults
@@ -20,6 +21,9 @@ export interface SessionCreationResult {
   created?: boolean;
   error?: string;
   deploymentType?: string;
+  // New fields for Supabase integration
+  supabaseSessionId?: string;
+  synced?: boolean;
 }
 
 /**
@@ -59,11 +63,36 @@ export class AgentEngineSessionService extends SessionService {
         const sessionData = await createSessionResponse.json();
         const actualSessionId = sessionData.output?.id;
         if (actualSessionId) {
+          // Try to sync with Supabase (non-blocking)
+          let supabaseSessionId: string | undefined;
+          let synced = false;
+          
+          try {
+            const syncResult = await syncSessionMetadata(
+              userId,
+              actualSessionId,
+              `Session ${new Date().toLocaleDateString()}`,
+              { deployment_type: 'agent_engine' }
+            );
+            
+            if (syncResult.success) {
+              supabaseSessionId = syncResult.supabaseSessionId;
+              synced = true;
+              console.log(`✅ Session synced to Supabase: ${supabaseSessionId}`);
+            } else {
+              console.warn('⚠️ Supabase sync failed, continuing with ADK session only');
+            }
+          } catch (syncError) {
+            console.warn('⚠️ Supabase sync error (non-critical):', syncError);
+          }
+
           return {
             success: true,
             sessionId: actualSessionId,
             created: true,
             deploymentType: "agent_engine",
+            supabaseSessionId,
+            synced,
           };
         }
       }
@@ -141,11 +170,37 @@ export class LocalBackendSessionService extends SessionService {
       }
 
       console.log("Local backend session created successfully:", sessionId);
+
+      // Try to sync with Supabase (non-blocking)
+      let supabaseSessionId: string | undefined;
+      let synced = false;
+      
+      try {
+        const syncResult = await syncSessionMetadata(
+          userId,
+          sessionId,
+          `Session ${new Date().toLocaleDateString()}`,
+          { deployment_type: 'local_backend' }
+        );
+        
+        if (syncResult.success) {
+          supabaseSessionId = syncResult.supabaseSessionId;
+          synced = true;
+          console.log(`✅ Session synced to Supabase: ${supabaseSessionId}`);
+        } else {
+          console.warn('⚠️ Supabase sync failed, continuing with ADK session only');
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Supabase sync error (non-critical):', syncError);
+      }
+
       return {
         success: true,
         sessionId,
         created: true,
         deploymentType: "local_backend",
+        supabaseSessionId,
+        synced,
       };
     } catch (sessionError) {
       console.error("Local backend session creation error:", sessionError);
@@ -176,6 +231,7 @@ export function getSessionService(): SessionService {
 /**
  * Convenience function to create a session using the appropriate service
  * This function determines the deployment strategy and delegates to the correct service
+ * Now includes automatic Supabase synchronization
  */
 export async function createSessionWithService(
   userId: string
