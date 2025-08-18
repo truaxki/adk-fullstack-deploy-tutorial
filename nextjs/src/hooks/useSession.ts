@@ -130,7 +130,7 @@ export function useSession(): UseSessionReturn {
       
       return actualSessionId;
     },
-    [handleSessionSwitch]
+    [handleSessionSwitch, user?.id, user?.email, userId]
   );
 
   // Handle user ID changes
@@ -164,7 +164,7 @@ export function useSession(): UseSessionReturn {
       console.log('📊 [useSession] Supabase load result:', {
         success: result.success,
         dataLength: result.success ? result.data.length : 0,
-        error: result.error
+        error: !result.success ? result.error : undefined
       });
       
       if (result.success) {

@@ -2,6 +2,7 @@
 // Server-only version of Supabase session service
 
 import { createClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ChatSessionDB,
   ChatSessionInsert,
@@ -16,9 +17,9 @@ import type {
  * This version always uses the server client with cookie authentication
  */
 export class SupabaseSessionServiceServer {
-  private supabase: any = null;
+  private supabase: SupabaseClient | null = null;
 
-  private async getClient() {
+  private async getClient(): Promise<SupabaseClient> {
     if (!this.supabase) {
       console.log('🔧 [SupabaseSessionServiceServer] Creating server client with cookies');
       this.supabase = await createClient();

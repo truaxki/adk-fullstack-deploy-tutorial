@@ -45,17 +45,33 @@ export async function loadMessagesFromSupabase(
     }
     
     // Convert Supabase messages to frontend Message format
-    const messages: Message[] = result.data.map(msg => ({
-      id: msg.id,
-      type: msg.message_type === 'human' ? 'human' : msg.message_type === 'ai' ? 'ai' : 'system',
-      content: typeof msg.message_content === 'string' 
-        ? msg.message_content 
-        : msg.message_content.text || JSON.stringify(msg.message_content),
-      timestamp: new Date(msg.created_at),
-      agent: msg.message_type === 'human' ? 'user' : 'assistant',
-      isStreaming: false,
-      timelineActivities: []
-    }));
+    // Filter out system messages as the frontend doesn't support them
+    const messages: Message[] = result.data
+      .filter(msg => msg.message_type !== 'system')
+      .map(msg => {
+        let content = '';
+        
+        if (typeof msg.message_content === 'string') {
+          content = msg.message_content;
+        } else if (msg.message_content && typeof msg.message_content === 'object') {
+          // Check if it has a text property
+          const msgContent = msg.message_content as Record<string, unknown>;
+          if (typeof msgContent.text === 'string') {
+            content = msgContent.text;
+          } else {
+            content = JSON.stringify(msg.message_content);
+          }
+        } else {
+          content = '';
+        }
+        
+        return {
+          id: msg.id || '',
+          type: msg.message_type as 'human' | 'ai',
+          content,
+          timestamp: msg.created_at ? new Date(msg.created_at) : new Date()
+        };
+      });
     
     console.log("✅ [MESSAGE_ACTIONS] Loaded messages from Supabase:", messages.length);
     

@@ -25,7 +25,7 @@ export interface ChatSessionDB {
     last_agent?: string;
     website_count?: number;
     tags?: string[];
-    [key: string]: any; // Allow additional metadata
+    additional_data?: Record<string, unknown>; // Allow additional metadata without using 'any'
   }
   
   /**
@@ -49,7 +49,7 @@ export interface ChatSessionDB {
     sidebarWidth?: number;
     fontSize?: 'small' | 'medium' | 'large';
     compactMode?: boolean;
-    [key: string]: any; // Allow additional preferences
+    additional_preferences?: Record<string, unknown>; // Allow additional preferences without using 'any'
   }
   
   /**
@@ -61,7 +61,7 @@ export interface ChatSessionDB {
     showTimestamps?: boolean;
     showThinkingProcess?: boolean;
     autoSaveInterval?: number; // in seconds
-    [key: string]: any; // Allow additional preferences
+    additional_settings?: Record<string, unknown>; // Allow additional preferences without using 'any'
   }
   
   /**
@@ -137,7 +137,7 @@ export interface ChatSessionDB {
     session_id: string;
     user_id: string;
     message_type: 'human' | 'ai' | 'system';
-    message_content: any; // JSONB
+    message_content: Record<string, unknown>; // JSONB - use Record instead of 'any'
     message_role?: string;
     sequence_number: number;
     created_at: string;

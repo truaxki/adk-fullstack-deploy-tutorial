@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabaseSessionService } from '@/lib/services/supabase-session-service';
-import type { UserStateDB, UIPreferences, ChatPreferences } from '@/types/supabase-db';
+import type { UIPreferences, ChatPreferences } from '@/types/supabase-db';
 
 /**
  * User preferences state and actions
@@ -170,7 +170,7 @@ export function useUserPreferences(userId: string | null): UserPreferencesState 
       
       // Update in Supabase
       const result = await supabaseSessionService.upsertUserState(userId, {
-        current_session_id: sessionId
+        current_session_id: sessionId || undefined
       });
       
       if (!result.success) {

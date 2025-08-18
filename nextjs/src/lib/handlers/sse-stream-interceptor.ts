@@ -40,7 +40,7 @@ export function createSSEInterceptor(
     } else {
       console.error('❌ [SSE_INTERCEPTOR] Failed to resolve Supabase session:', {
         adkSessionId,
-        error: result.error
+        error: result.success ? 'No data found' : result.error
       });
     }
   });
@@ -48,7 +48,7 @@ export function createSSEInterceptor(
   const decoder = new TextDecoder();
 
   return new TransformStream({
-    async start(controller) {
+    async start() {
       console.log('🚀 [SSE_INTERCEPTOR] Stream started, waiting for session resolution...');
       // Ensure session is resolved before processing
       const result = await sessionPromise;
@@ -189,7 +189,7 @@ export function createSSEInterceptor(
             }
           } catch (parseError) {
             console.log('⚠️ [SSE_INTERCEPTOR] Failed to parse JSON:', {
-              error: parseError.message,
+              error: parseError instanceof Error ? parseError.message : String(parseError),
               data: eventData.slice(0, 100)
             });
           }
@@ -199,7 +199,7 @@ export function createSSEInterceptor(
       }
     },
 
-    async flush(controller) {
+    async flush() {
       console.log('🏁 [SSE_INTERCEPTOR] Stream flushing', {
         hasTerminationSignal: hasReceivedTerminationSignal,
         accumulatedLength: accumulatedContent.length,

@@ -13,7 +13,7 @@ import {
   Calendar,
   Loader2,
   Plus,
-  AlertCircle,
+  // AlertCircle - removed unused import
 } from "lucide-react";
 import { toast } from "sonner";
 

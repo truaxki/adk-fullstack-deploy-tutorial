@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { 
   MessageCircle, 
-  Search, 
-  Image, 
+  // Search - removed unused import
+  Image as ImageIcon, 
   FileText, 
   GitBranch, 
   MoreHorizontal,
@@ -52,7 +52,7 @@ export function DesktopSidebar({
   
   // Get session context from ChatProvider - this now includes Supabase session history
   const {
-    userId,
+    // userId - removed unused variable
     sessionId,
     sessionHistory,
     loadingSessions,
@@ -64,13 +64,12 @@ export function DesktopSidebar({
   // Debug logging for sidebar
   React.useEffect(() => {
     console.log('📋 [DesktopSidebar] Session state update:', {
-      userId,
       sessionId,
       sessionHistoryLength: sessionHistory.length,
       loadingSessions,
       sessionHistory
     });
-  }, [userId, sessionId, sessionHistory, loadingSessions]);
+  }, [sessionId, sessionHistory, loadingSessions]);
 
   // Get authenticated user
   useEffect(() => {
@@ -221,7 +220,7 @@ export function DesktopSidebar({
       <div className="p-4 border-b border-gray-200">
         <nav className="space-y-1">
           <button className="flex items-center gap-3 w-full p-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors">
-            <Image className="w-4 h-4" />
+            <ImageIcon className="w-4 h-4" />
             <span className="text-sm">Images</span>
           </button>
           <button className="flex items-center gap-3 w-full p-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors">

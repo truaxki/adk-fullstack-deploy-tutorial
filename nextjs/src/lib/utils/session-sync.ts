@@ -42,8 +42,8 @@ export async function syncSessionMetadata(
     const existingResult = await supabaseSessionServiceServer.findSessionByAdkId(adkSessionId);
     console.log('🔍 [SESSION_SYNC] Existing session check result:', {
       success: existingResult.success,
-      found: !!existingResult.data,
-      error: existingResult.error
+      found: existingResult.success ? !!existingResult.data : false,
+      error: existingResult.success ? undefined : existingResult.error
     });
     
     if (existingResult.success && existingResult.data) {
@@ -52,14 +52,14 @@ export async function syncSessionMetadata(
       const updateResult = await supabaseSessionServiceServer.updateChatSession(
         existingResult.data.id,
         {
-          session_title: sessionTitle || existingResult.data.session_title,
-          session_metadata: metadata || existingResult.data.session_metadata,
+          session_title: sessionTitle ?? existingResult.data.session_title ?? undefined,
+          session_metadata: metadata ?? existingResult.data.session_metadata ?? undefined,
         }
       );
       
       console.log('📝 [SESSION_SYNC] Update result:', {
         success: updateResult.success,
-        error: updateResult.error
+        error: updateResult.success ? undefined : updateResult.error
       });
       
       if (updateResult.success) {
@@ -88,7 +88,7 @@ export async function syncSessionMetadata(
     console.log('➕ [SESSION_SYNC] Create result:', {
       success: createResult.success,
       sessionId: createResult.success ? createResult.data.id : null,
-      error: createResult.error
+      error: createResult.success ? undefined : createResult.error
     });
     
     if (createResult.success) {

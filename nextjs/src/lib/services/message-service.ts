@@ -1,15 +1,16 @@
 // src/lib/services/message-service.ts
 // Service for managing chat messages in Supabase
 
-import { supabaseSessionServiceServer } from './supabase-session-service-server';
+// import { supabaseSessionServiceServer } from './supabase-session-service-server'; - removed unused import
 import type { SupabaseResponse } from '@/types/supabase-db';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface ChatMessage {
   id?: string;
   session_id: string;
   user_id: string;
   message_type: 'human' | 'ai' | 'system';
-  message_content: any; // JSONB content
+  message_content: Record<string, unknown>; // JSONB content
   message_role?: string;
   sequence_number: number;
   created_at?: string;
@@ -25,9 +26,9 @@ export interface MessageSaveResult {
  * Service for saving and retrieving chat messages from Supabase
  */
 export class MessageService {
-  private supabase: any = null;
+  private supabase: SupabaseClient | null = null;
 
-  private async getClient() {
+  private async getClient(): Promise<SupabaseClient> {
     if (!this.supabase) {
       const { createClient } = await import('@/lib/supabase/server');
       this.supabase = await createClient();
@@ -42,7 +43,7 @@ export class MessageService {
     sessionId: string,
     userId: string,
     messageType: 'human' | 'ai' | 'system',
-    messageContent: any,
+    messageContent: Record<string, unknown>,
     sequenceNumber: number
   ): Promise<MessageSaveResult> {
     try {

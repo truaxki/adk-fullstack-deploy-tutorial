@@ -9,7 +9,7 @@ import type {
   ChatSessionUpdate,
   UserStateDB,
   UserStateInsert,
-  UserStateUpdate,
+  // UserStateUpdate - removed unused import
   EnhancedSession,
   SupabaseResponse
 } from '@/types/supabase-db';
@@ -19,11 +19,10 @@ import type {
  * Provides bridge between Supabase auth and ADK backend sessions
  */
 export class SupabaseSessionService {
-  private supabase: SupabaseClient;
+  private supabase: SupabaseClient | null = null;
 
   constructor() {
     // Client will be created lazily
-    this.supabase = null as any;
   }
 
   private async getClient(): Promise<SupabaseClient> {
@@ -255,7 +254,7 @@ export class SupabaseSessionService {
         sessionUserId: session.user_id,
         authMatch: authUser?.id === session.user_id,
         sessionId: sessionId,
-        clientType: this.useServerClient ? 'server' : 'browser'
+        clientType: 'browser'
       });
       
       const insertData = {
