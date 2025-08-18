@@ -30,7 +30,7 @@ interface SessionSelectorProps {
   currentUserId: string;
   currentSessionId: string;
   onSessionSelect: (sessionId: string) => void;
-  onCreateSession: (userId: string) => Promise<void>;
+  onCreateSession: (userId: string) => Promise<string>;
   className?: string;
 }
 

@@ -37,7 +37,7 @@ export interface ChatContextValue {
   // Session actions
   handleUserIdChange: (newUserId: string) => void;
   handleUserIdConfirm: (confirmedUserId: string) => void;
-  handleCreateNewSession: (sessionUserId: string) => Promise<void>;
+  handleCreateNewSession: (sessionUserId: string) => Promise<string>;
   handleSessionSwitch: (newSessionId: string) => void;
 
   // Message actions
@@ -351,7 +351,7 @@ export function ChatProvider({
         throw error;
       }
     },
-    [userId, sessionId, addMessage, streamingManager]
+    [userId, sessionId, addMessage, streamingManager, handleCreateNewSession]
   );
 
   // Context value
