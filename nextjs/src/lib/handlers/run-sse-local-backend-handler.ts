@@ -169,10 +169,19 @@ export async function handleLocalBackendStreamRequest(
     });
 
     // Create SSE interceptor to capture and save AI responses
+    console.log('🚀 [HANDLER] Creating SSE interceptor for AI response capture:', {
+      sessionId: requestData.sessionId,
+      userId: requestData.userId,
+      hasResponseBody: !!response.body
+    });
+    
     const interceptor = createSSEInterceptor(requestData.sessionId, requestData.userId);
     
     // Pipe the response through the interceptor
+    console.log('🔄 [HANDLER] Piping response through interceptor...');
     const interceptedStream = response.body!.pipeThrough(interceptor);
+    
+    console.log('✅ [HANDLER] Interceptor pipeline established, returning SSE response');
 
     // Return the intercepted stream
     return new Response(interceptedStream, {
