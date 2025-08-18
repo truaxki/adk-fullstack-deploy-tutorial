@@ -67,18 +67,38 @@ export function useSession(): UseSessionReturn {
   // Handle new session creation
   const handleCreateNewSession = useCallback(
     async (sessionUserId: string): Promise<string> => {
+      console.log('🚀 [useSession] handleCreateNewSession called with userId:', sessionUserId);
+      console.log('🔍 [useSession] Current auth state:', {
+        hookUserId: userId,
+        paramUserId: sessionUserId,
+        authUser: user?.id,
+        authEmail: user?.email,
+        idsMatch: sessionUserId === user?.id
+      });
+      
       if (!sessionUserId) {
         throw new Error("User ID is required to create a session");
+      }
+
+      // Validate user ID matches authenticated user
+      if (user?.id && sessionUserId !== user.id) {
+        console.error('❌ [useSession] User ID mismatch!', {
+          expected: user.id,
+          received: sessionUserId
+        });
+        throw new Error(`User ID mismatch: expected ${user.id}, got ${sessionUserId}`);
       }
 
       let actualSessionId = "";
 
       try {
+        console.log('📡 [useSession] Importing session action...');
         // Import Server Action dynamically to avoid circular dependencies in hooks
         const { createSessionAction } = await import(
           "@/lib/actions/session-actions"
         );
 
+        console.log('🚀 [useSession] Calling createSessionAction with userId:', sessionUserId);
         const sessionResult = await createSessionAction(sessionUserId);
 
         if (sessionResult.success) {
@@ -127,14 +147,25 @@ export function useSession(): UseSessionReturn {
 
   // Load session history from Supabase
   const refreshSessionHistory = useCallback(async (): Promise<void> => {
+    console.log('🔄 [useSession] Refreshing session history for user:', userId);
+    
     if (!userId) {
+      console.log('👤 [useSession] No userId, clearing session history');
       setSessionHistory([]);
       return;
     }
 
     try {
       setLoadingSessions(true);
+      console.log('📡 [useSession] Loading sessions from Supabase...');
+      
       const result = await supabaseSessionService.loadUserSessions(userId);
+      
+      console.log('📊 [useSession] Supabase load result:', {
+        success: result.success,
+        dataLength: result.success ? result.data.length : 0,
+        error: result.error
+      });
       
       if (result.success) {
         const sessions = result.data.map(session => ({
@@ -143,14 +174,16 @@ export function useSession(): UseSessionReturn {
           lastActivity: session.last_message_at ? new Date(session.last_message_at) : null,
           source: 'supabase' as const
         }));
+        
+        console.log('📚 [useSession] Processed sessions:', sessions);
         setSessionHistory(sessions);
-        console.log(`📚 Loaded ${sessions.length} sessions from Supabase`);
+        console.log(`✅ [useSession] Loaded ${sessions.length} sessions from Supabase`);
       } else {
-        console.warn('⚠️ Failed to load session history:', result.error);
+        console.warn('⚠️ [useSession] Failed to load session history:', result.error);
         setSessionHistory([]);
       }
     } catch (error) {
-      console.error('❌ Error loading session history:', error);
+      console.error('❌ [useSession] Error loading session history:', error);
       setSessionHistory([]);
     } finally {
       setLoadingSessions(false);
@@ -160,10 +193,26 @@ export function useSession(): UseSessionReturn {
   // Supabase authentication integration
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log('👤 [useSession] Fetching authenticated user...');
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      console.log('👤 [useSession] Auth user result:', {
+        user: user ? {
+          id: user.id,
+          email: user.email,
+          provider: user.app_metadata?.provider,
+          created_at: user.created_at
+        } : null,
+        error: error?.message,
+        hasUser: !!user
+      });
+      
       setUser(user);
       if (user?.id) {
+        console.log('✅ [useSession] Setting userId from auth:', user.id);
         setUserId(user.id);
+      } else {
+        console.warn('⚠️ [useSession] No authenticated user ID available');
       }
     };
     
@@ -171,12 +220,28 @@ export function useSession(): UseSessionReturn {
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        console.log('🔄 [useSession] Auth state change:', {
+          event,
+          hasSession: !!session,
+          hasUser: !!session?.user
+        });
+        
         const authUser = session?.user ?? null;
+        console.log('👤 [useSession] Auth state change - user details:', {
+          user: authUser ? {
+            id: authUser.id,
+            email: authUser.email,
+            provider: authUser.app_metadata?.provider
+          } : null
+        });
+        
         setUser(authUser);
         if (authUser?.id) {
+          console.log('✅ [useSession] Auth change - setting userId:', authUser.id);
           setUserId(authUser.id);
         } else {
+          console.log('🚪 [useSession] Auth change - clearing user data');
           setUserId("");
           setSessionId(""); // Clear session when user signs out
           setSessionHistory([]); // Clear session history

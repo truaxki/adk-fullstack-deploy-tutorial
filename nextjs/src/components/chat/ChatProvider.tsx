@@ -23,6 +23,13 @@ export interface ChatContextValue {
   userId: string;
   sessionId: string;
   user: import('@supabase/supabase-js').User | null;
+  sessionHistory: Array<{
+    id: string;
+    title: string;
+    lastActivity: Date | null;
+    source: 'supabase' | 'adk';
+  }>;
+  loadingSessions: boolean;
 
   // Message state
   messages: Message[];
@@ -39,6 +46,7 @@ export interface ChatContextValue {
   handleUserIdConfirm: (confirmedUserId: string) => void;
   handleCreateNewSession: (sessionUserId: string) => Promise<string>;
   handleSessionSwitch: (newSessionId: string) => void;
+  refreshSessionHistory: () => Promise<void>;
 
   // Message actions
   handleSubmit: (
@@ -76,10 +84,13 @@ export function ChatProvider({
     userId,
     sessionId,
     user,
+    sessionHistory,
+    loadingSessions,
     handleUserIdChange,
     handleUserIdConfirm,
     handleCreateNewSession,
     handleSessionSwitch,
+    refreshSessionHistory,
   } = useSession();
 
   const {
@@ -360,6 +371,8 @@ export function ChatProvider({
     userId,
     sessionId,
     user,
+    sessionHistory,
+    loadingSessions,
 
     // Message state
     messages,
@@ -376,6 +389,7 @@ export function ChatProvider({
     handleUserIdConfirm,
     handleCreateNewSession,
     handleSessionSwitch,
+    refreshSessionHistory,
 
     // Message actions
     handleSubmit,

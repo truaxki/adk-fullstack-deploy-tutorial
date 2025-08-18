@@ -22,7 +22,16 @@ export class SupabaseSessionService {
   private supabase: SupabaseClient;
 
   constructor() {
-    this.supabase = createClient();
+    // Client will be created lazily
+    this.supabase = null as any;
+  }
+
+  private async getClient(): Promise<SupabaseClient> {
+    if (!this.supabase) {
+      console.log('🔧 [SupabaseSessionService] Using browser client');
+      this.supabase = createClient();
+    }
+    return this.supabase;
   }
 
   // ============================================
@@ -36,11 +45,39 @@ export class SupabaseSessionService {
    */
   async loadUserSessions(userId: string): Promise<SupabaseResponse<ChatSessionDB[]>> {
     try {
-      // First, let's try to get the data without ordering to see what columns exist
-      const { data, error } = await this.supabase
+      console.log('[SupabaseSessionService] Loading sessions for user:', userId);
+      
+      const supabase = await this.getClient();
+      
+      // Check if user is authenticated first
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      console.log('[SupabaseSessionService] Auth user check:', {
+        authUser: authUser?.id,
+        requestedUserId: userId,
+        isAuthenticated: !!authUser
+      });
+      
+      const { data, error } = await supabase
         .from('chat_sessions')
         .select('*')
         .eq('user_id', userId);
+      
+      if (error) {
+        // Better error logging for Supabase errors
+        console.error('[SupabaseSessionService] Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        
+        return {
+          success: false,
+          error: `Supabase error: ${error.message}${error.details ? ` - ${error.details}` : ''}${error.hint ? ` (Hint: ${error.hint})` : ''}`
+        };
+      }
+
+      console.log('[SupabaseSessionService] Query successful, data length:', data?.length || 0);
       
       // If we have data, sort it in JavaScript by updated_at or created_at
       let sortedData = data;
@@ -56,23 +93,20 @@ export class SupabaseSessionService {
         });
       }
 
-      if (error) {
-        console.error('[SupabaseSessionService] Error loading sessions:', error);
-        return {
-          success: false,
-          error: error.message
-        };
-      }
-
       return {
         success: true,
         data: sortedData || []
       };
     } catch (error) {
-      console.error('[SupabaseSessionService] Unexpected error:', error);
+      console.error('[SupabaseSessionService] JavaScript error:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown JavaScript error'
       };
     }
   }
@@ -84,7 +118,8 @@ export class SupabaseSessionService {
    */
   async getSession(sessionId: string): Promise<SupabaseResponse<ChatSessionDB | null>> {
     try {
-      const { data, error } = await this.supabase
+      const supabase = await this.getClient();
+      const { data, error } = await supabase
         .from('chat_sessions')
         .select('*')
         .eq('id', sessionId)
@@ -123,7 +158,8 @@ export class SupabaseSessionService {
    */
   async findSessionByAdkId(adkSessionId: string): Promise<SupabaseResponse<ChatSessionDB | null>> {
     try {
-      const { data, error } = await this.supabase
+      const supabase = await this.getClient();
+      const { data, error } = await supabase
         .from('chat_sessions')
         .select('*')
         .eq('adk_session_id', adkSessionId)
@@ -162,7 +198,8 @@ export class SupabaseSessionService {
    */
   async loadUserState(userId: string): Promise<SupabaseResponse<UserStateDB | null>> {
     try {
-      const { data, error } = await this.supabase
+      const supabase = await this.getClient();
+      const { data, error } = await supabase
         .from('user_state')
         .select('*')
         .eq('user_id', userId)
@@ -205,14 +242,35 @@ export class SupabaseSessionService {
    */
   async createChatSession(session: ChatSessionInsert): Promise<SupabaseResponse<ChatSessionDB>> {
     try {
-      const { data, error } = await this.supabase
+      // Generate UUID for the id field since table doesn't have a default
+      const sessionId = crypto.randomUUID();
+      
+      const supabase = await this.getClient();
+      
+      // Debug: Check authentication state
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      console.log('🔐 [SupabaseSessionService] Auth state check for INSERT:', {
+        authUser: authUser?.id,
+        authEmail: authUser?.email,
+        sessionUserId: session.user_id,
+        authMatch: authUser?.id === session.user_id,
+        sessionId: sessionId,
+        clientType: this.useServerClient ? 'server' : 'browser'
+      });
+      
+      const insertData = {
+        id: sessionId,
+        ...session,
+        message_count: session.message_count || 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('📝 [SupabaseSessionService] Attempting INSERT with data:', insertData);
+      
+      const { data, error } = await supabase
         .from('chat_sessions')
-        .insert({
-          ...session,
-          message_count: session.message_count || 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -248,7 +306,8 @@ export class SupabaseSessionService {
     updates: ChatSessionUpdate
   ): Promise<SupabaseResponse<ChatSessionDB>> {
     try {
-      const { data, error } = await this.supabase
+      const supabase = await this.getClient();
+      const { data, error } = await supabase
         .from('chat_sessions')
         .update({
           ...updates,
@@ -287,9 +346,10 @@ export class SupabaseSessionService {
     incrementMessageCount: boolean = true
   ): Promise<SupabaseResponse<ChatSessionDB>> {
     try {
+      const supabase = await this.getClient();
       // First get current message count if incrementing
       if (incrementMessageCount) {
-        const { data: current, error: fetchError } = await this.supabase
+        const { data: current, error: fetchError } = await supabase
           .from('chat_sessions')
           .select('message_count')
           .eq('id', sessionId)
@@ -304,7 +364,7 @@ export class SupabaseSessionService {
 
         const newCount = (current?.message_count || 0) + 1;
 
-        const { data, error } = await this.supabase
+        const { data, error } = await supabase
           .from('chat_sessions')
           .update({
             last_message_at: new Date().toISOString(),
@@ -328,7 +388,7 @@ export class SupabaseSessionService {
         };
       } else {
         // Just update last message time
-        const { data, error } = await this.supabase
+        const { data, error } = await supabase
           .from('chat_sessions')
           .update({
             last_message_at: new Date().toISOString(),
@@ -368,7 +428,8 @@ export class SupabaseSessionService {
     state: Partial<UserStateInsert>
   ): Promise<SupabaseResponse<UserStateDB>> {
     try {
-      const { data, error } = await this.supabase
+      const supabase = await this.getClient();
+      const { data, error } = await supabase
         .from('user_state')
         .upsert({
           user_id: userId,
@@ -470,5 +531,10 @@ export class SupabaseSessionService {
   }
 }
 
-// Export singleton instance
+// Export singleton instances - browser client only
 export const supabaseSessionService = new SupabaseSessionService();
+
+// Export factory function for flexibility  
+export function createSupabaseSessionService() {
+  return new SupabaseSessionService();
+}

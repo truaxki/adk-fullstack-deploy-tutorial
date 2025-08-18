@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   MessageCircle, 
   Search, 
@@ -15,19 +15,9 @@ import {
   LogOut
 } from "lucide-react";
 import { useChatContext } from "@/components/chat/ChatProvider";
-import { fetchActiveSessionsAction } from "@/lib/actions/session-list-actions";
 import { createClient } from '@/lib/supabase/client';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-
-interface ActiveSession {
-  id: string;
-  userId: string;
-  appName: string;
-  lastUpdateTime: Date | null;
-  messageCount: number;
-  title?: string;
-}
 
 interface DesktopSidebarProps {
   className?: string;
@@ -53,8 +43,6 @@ export function DesktopSidebar({
   onNewChat
 }: DesktopSidebarProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<"research" | "chat">("chat");
-  const [sessions, setSessions] = useState<ActiveSession[]>([]);
-  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -62,13 +50,27 @@ export function DesktopSidebar({
   const router = useRouter();
   const supabase = createClient();
   
-  // Get session context from ChatProvider
+  // Get session context from ChatProvider - this now includes Supabase session history
   const {
     userId,
     sessionId,
+    sessionHistory,
+    loadingSessions,
     handleSessionSwitch,
-    handleCreateNewSession
+    handleCreateNewSession,
+    refreshSessionHistory
   } = useChatContext();
+
+  // Debug logging for sidebar
+  React.useEffect(() => {
+    console.log('📋 [DesktopSidebar] Session state update:', {
+      userId,
+      sessionId,
+      sessionHistoryLength: sessionHistory.length,
+      loadingSessions,
+      sessionHistory
+    });
+  }, [userId, sessionId, sessionHistory, loadingSessions]);
 
   // Get authenticated user
   useEffect(() => {
@@ -89,34 +91,8 @@ export function DesktopSidebar({
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  // Fetch active sessions for authenticated user
-  const fetchSessions = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      setIsLoadingSessions(true);
-      const result = await fetchActiveSessionsAction(user.id);
-      
-      if (result.success) {
-        setSessions(result.sessions);
-      } else {
-        console.error("Failed to fetch sessions:", result.error);
-      }
-    } catch (error) {
-      console.error("Error fetching sessions:", error);
-    } finally {
-      setIsLoadingSessions(false);
-    }
-  }, [user?.id]);
-
-  // Load sessions when user changes
-  useEffect(() => {
-    if (user) {
-      fetchSessions();
-    } else {
-      setSessions([]);
-    }
-  }, [user, fetchSessions]);
+  // Sessions are now provided by ChatProvider via useSession hook
+  // No need to fetch separately - sessionHistory and loadingSessions come from context
 
   const handleTabChange = (tab: "research" | "chat") => {
     setActiveTab(tab);
@@ -129,9 +105,11 @@ export function DesktopSidebar({
   };
 
   const handleNewChat = async () => {
+    console.log('🆕 [DesktopSidebar] Creating new chat for user:', user?.id);
     setSessionError(null);
     
     if (!user?.id) {
+      console.error('❌ [DesktopSidebar] No user ID available');
       setSessionError('Please set a User ID first');
       return;
     }
@@ -139,24 +117,24 @@ export function DesktopSidebar({
     setIsCreatingSession(true);
     
     try {
+      console.log('🚀 [DesktopSidebar] Calling handleCreateNewSession...');
       const newSessionId = await handleCreateNewSession(user.id);
+      console.log('✅ [DesktopSidebar] New session created:', newSessionId);
       
       // Refresh the session list to show the new session
-      const result = await fetchActiveSessionsAction(user.id);
+      console.log('🔄 [DesktopSidebar] Refreshing session history...');
+      await refreshSessionHistory();
+      console.log('✅ [DesktopSidebar] Session history refreshed');
       
-      if (result.success) {
-        setSessions(result.sessions);
-        // The session was already switched by handleCreateNewSession, but ensure it's selected
-        if (newSessionId) {
-          handleSessionSwitch(newSessionId);
-        }
-      } else {
-        throw new Error('Failed to fetch updated sessions');
+      // The session was already switched by handleCreateNewSession, but ensure it's selected
+      if (newSessionId) {
+        console.log('🔄 [DesktopSidebar] Switching to new session:', newSessionId);
+        handleSessionSwitch(newSessionId);
       }
       
       onNewChat?.();
     } catch (error) {
-      console.error('[DesktopSidebar] Session creation failed:', error);
+      console.error('❌ [DesktopSidebar] Session creation failed:', error);
       setSessionError('Failed to create new chat. Please try again.');
     } finally {
       setIsCreatingSession(false);
@@ -292,17 +270,17 @@ export function DesktopSidebar({
 
         {/* Sessions List */}
         <div className="space-y-1">
-          {isLoadingSessions ? (
+          {loadingSessions ? (
             <div className="flex items-center justify-center py-4">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
               <span className="text-sm text-gray-500 ml-2">Loading sessions...</span>
             </div>
-          ) : sessions.length === 0 ? (
+          ) : sessionHistory.length === 0 ? (
             <div className="text-center py-4">
               <span className="text-sm text-gray-500">No sessions yet</span>
             </div>
           ) : (
-            sessions.map((session) => (
+            sessionHistory.map((session) => (
               <button
                 key={session.id}
                 onClick={() => handleChatSelect(session.id)}
@@ -315,15 +293,15 @@ export function DesktopSidebar({
                 <MessageCircle className="w-4 h-4 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm truncate">{session.title}</div>
-                  <div className="text-xs text-gray-500">
-                    {session.messageCount} messages
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">
+                      {session.source}
+                    </span>
+                    {session.lastActivity && (
+                      <span>• {session.lastActivity.toLocaleDateString()}</span>
+                    )}
                   </div>
                 </div>
-                {session.lastUpdateTime && (
-                  <div className="text-xs text-gray-400 flex-shrink-0">
-                    {new Date(session.lastUpdateTime).toLocaleDateString()}
-                  </div>
-                )}
               </button>
             ))
           )}

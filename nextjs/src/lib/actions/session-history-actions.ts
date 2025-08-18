@@ -2,7 +2,7 @@
 
 import { getSessionWithEvents } from "@/lib/session-history";
 import { convertAdkEventsToMessages } from "@/lib/message-converter";
-import { supabaseSessionService } from "@/lib/services/supabase-session-service";
+import { supabaseSessionServiceServer } from "@/lib/services/supabase-session-service-server";
 import type { Message } from "@/types";
 import type { ProcessedEvent } from "@/components/ActivityTimeline";
 
@@ -40,7 +40,7 @@ export async function loadSessionHistoryAction(
     if (isUUID) {
       // This might be a Supabase session ID, try to get the ADK session ID
       console.log("🔍 [SESSION_HISTORY_ACTION] Checking Supabase for session:", sessionId);
-      const supabaseResult = await supabaseSessionService.getSession(sessionId);
+      const supabaseResult = await supabaseSessionServiceServer.getSession(sessionId);
       
       if (supabaseResult.success && supabaseResult.data) {
         isSupabaseSession = true;
@@ -60,7 +60,7 @@ export async function loadSessionHistoryAction(
       }
     } else {
       // This is likely an ADK session ID, check if it's cached in Supabase
-      const findResult = await supabaseSessionService.findSessionByAdkId(sessionId);
+      const findResult = await supabaseSessionServiceServer.findSessionByAdkId(sessionId);
       if (findResult.success && findResult.data) {
         console.log("📦 [SESSION_HISTORY_ACTION] Found session in Supabase cache");
         // We found it in cache, but still load from ADK for now
@@ -148,7 +148,7 @@ export async function loadSessionHistoryAction(
       // Update activity timestamp and message count
       try {
         if (isSupabaseSession) {
-          await supabaseSessionService.updateChatSession(sessionId, {
+          await supabaseSessionServiceServer.updateChatSession(sessionId, {
             message_count: historicalMessages.length,
             last_message_at: historicalMessages.length > 0 
               ? new Date().toISOString() 
@@ -156,9 +156,9 @@ export async function loadSessionHistoryAction(
           });
         } else {
           // Update by ADK ID
-          const findResult = await supabaseSessionService.findSessionByAdkId(adkSessionId);
+          const findResult = await supabaseSessionServiceServer.findSessionByAdkId(adkSessionId);
           if (findResult.success && findResult.data) {
-            await supabaseSessionService.updateChatSession(findResult.data.id, {
+            await supabaseSessionServiceServer.updateChatSession(findResult.data.id, {
               message_count: historicalMessages.length,
               last_message_at: historicalMessages.length > 0 
                 ? new Date().toISOString() 
@@ -218,7 +218,7 @@ export async function loadUserSessionsAction(userId: string): Promise<UserSessio
     console.log("🔄 [SESSION_HISTORY_ACTION] Loading user sessions:", userId);
 
     // First try to load from Supabase cache
-    const supabaseResult = await supabaseSessionService.loadUserSessions(userId);
+    const supabaseResult = await supabaseSessionServiceServer.loadUserSessions(userId);
 
     if (supabaseResult.success && supabaseResult.data.length > 0) {
       console.log("✅ [SESSION_HISTORY_ACTION] Loaded sessions from Supabase:", 

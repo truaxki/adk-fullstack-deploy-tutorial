@@ -39,7 +39,10 @@ export abstract class SessionService {
  */
 export class AgentEngineSessionService extends SessionService {
   async createSession(userId: string): Promise<SessionCreationResult> {
+    console.log('🚀 [AGENT_ENGINE_SESSION] Creating session for user:', userId);
+    
     const sessionEndpoint = getEndpointForPath("", "query");
+    console.log('🔗 [AGENT_ENGINE_SESSION] Endpoint:', sessionEndpoint);
 
     const createSessionPayload = {
       class_method: "create_session",
@@ -50,6 +53,8 @@ export class AgentEngineSessionService extends SessionService {
 
     try {
       const authHeaders = await getAuthHeaders();
+      console.log('📡 [AGENT_ENGINE_SESSION] Making request to ADK backend...');
+      
       const createSessionResponse = await fetch(sessionEndpoint, {
         method: "POST",
         headers: {
@@ -59,15 +64,22 @@ export class AgentEngineSessionService extends SessionService {
         body: JSON.stringify(createSessionPayload),
       });
 
+      console.log('📡 [AGENT_ENGINE_SESSION] Response status:', createSessionResponse.status);
+
       if (createSessionResponse.ok) {
         const sessionData = await createSessionResponse.json();
+        console.log('📊 [AGENT_ENGINE_SESSION] Session data received:', sessionData);
+        
         const actualSessionId = sessionData.output?.id;
+        console.log('🆔 [AGENT_ENGINE_SESSION] Extracted session ID:', actualSessionId);
+        
         if (actualSessionId) {
           // Try to sync with Supabase (non-blocking)
           let supabaseSessionId: string | undefined;
           let synced = false;
           
           try {
+            console.log('🔄 [AGENT_ENGINE_SESSION] Starting Supabase sync...');
             const syncResult = await syncSessionMetadata(
               userId,
               actualSessionId,
@@ -78,12 +90,12 @@ export class AgentEngineSessionService extends SessionService {
             if (syncResult.success) {
               supabaseSessionId = syncResult.supabaseSessionId;
               synced = true;
-              console.log(`✅ Session synced to Supabase: ${supabaseSessionId}`);
+              console.log(`✅ [AGENT_ENGINE_SESSION] Session synced to Supabase: ${supabaseSessionId}`);
             } else {
-              console.warn('⚠️ Supabase sync failed, continuing with ADK session only');
+              console.warn('⚠️ [AGENT_ENGINE_SESSION] Supabase sync failed:', syncResult.error);
             }
           } catch (syncError) {
-            console.warn('⚠️ Supabase sync error (non-critical):', syncError);
+            console.warn('⚠️ [AGENT_ENGINE_SESSION] Supabase sync error (non-critical):', syncError);
           }
 
           return {

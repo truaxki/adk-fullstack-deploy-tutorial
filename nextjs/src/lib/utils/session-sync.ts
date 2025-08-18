@@ -1,7 +1,7 @@
 // src/lib/utils/session-sync.ts
 // Utility for synchronizing sessions between ADK backend and Supabase
 
-import { supabaseSessionService } from '@/lib/services/supabase-session-service';
+import { supabaseSessionServiceServer } from '@/lib/services/supabase-session-service-server';
 import type { SessionMetadata } from '@/types/supabase-db';
 
 /**
@@ -30,18 +30,37 @@ export async function syncSessionMetadata(
   metadata?: SessionMetadata
 ): Promise<SyncResult> {
   try {
+    console.log('🔗 [SESSION_SYNC] Starting session sync:', {
+      userId,
+      adkSessionId,
+      sessionTitle,
+      metadata
+    });
+
     // Check if this ADK session already exists in Supabase
-    const existingResult = await supabaseSessionService.findSessionByAdkId(adkSessionId);
+    console.log('🔍 [SESSION_SYNC] Checking for existing session in Supabase...');
+    const existingResult = await supabaseSessionServiceServer.findSessionByAdkId(adkSessionId);
+    console.log('🔍 [SESSION_SYNC] Existing session check result:', {
+      success: existingResult.success,
+      found: !!existingResult.data,
+      error: existingResult.error
+    });
     
     if (existingResult.success && existingResult.data) {
       // Session already exists, update it
-      const updateResult = await supabaseSessionService.updateChatSession(
+      console.log('📝 [SESSION_SYNC] Session exists, updating...');
+      const updateResult = await supabaseSessionServiceServer.updateChatSession(
         existingResult.data.id,
         {
           session_title: sessionTitle || existingResult.data.session_title,
           session_metadata: metadata || existingResult.data.session_metadata,
         }
       );
+      
+      console.log('📝 [SESSION_SYNC] Update result:', {
+        success: updateResult.success,
+        error: updateResult.error
+      });
       
       if (updateResult.success) {
         return {
@@ -57,12 +76,19 @@ export async function syncSessionMetadata(
     }
     
     // Create new Supabase session record
-    const createResult = await supabaseSessionService.createChatSession({
+    console.log('➕ [SESSION_SYNC] Creating new Supabase session record...');
+    const createResult = await supabaseSessionServiceServer.createChatSession({
       user_id: userId,
       adk_session_id: adkSessionId,
       session_title: sessionTitle || `Session ${new Date().toLocaleDateString()}`,
       session_metadata: metadata || {},
       message_count: 0
+    });
+    
+    console.log('➕ [SESSION_SYNC] Create result:', {
+      success: createResult.success,
+      sessionId: createResult.success ? createResult.data.id : null,
+      error: createResult.error
     });
     
     if (createResult.success) {
@@ -118,7 +144,7 @@ export async function updateLastActivity(
     
     if (isUUID) {
       // Direct Supabase session ID
-      const result = await supabaseSessionService.updateSessionActivity(
+      const result = await supabaseSessionServiceServer.updateSessionActivity(
         sessionId,
         incrementMessages
       );
@@ -128,10 +154,10 @@ export async function updateLastActivity(
       };
     } else {
       // ADK session ID - find the corresponding Supabase record
-      const findResult = await supabaseSessionService.findSessionByAdkId(sessionId);
+      const findResult = await supabaseSessionServiceServer.findSessionByAdkId(sessionId);
       
       if (findResult.success && findResult.data) {
-        const result = await supabaseSessionService.updateSessionActivity(
+        const result = await supabaseSessionServiceServer.updateSessionActivity(
           findResult.data.id,
           incrementMessages
         );

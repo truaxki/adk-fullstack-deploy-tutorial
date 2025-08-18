@@ -15,10 +15,13 @@ export function ChatHeader(): React.JSX.Element {
   const {
     userId,
     sessionId,
+    sessionHistory,
+    loadingSessions,
     handleUserIdChange,
     handleUserIdConfirm,
     handleSessionSwitch,
     handleCreateNewSession,
+    refreshSessionHistory,
   } = useChatContext();
 
   return (
@@ -55,8 +58,11 @@ export function ChatHeader(): React.JSX.Element {
             <SessionSelector
               currentUserId={userId}
               currentSessionId={sessionId}
+              sessionHistory={sessionHistory}
+              loadingSessions={loadingSessions}
               onSessionSelect={handleSessionSwitch}
               onCreateSession={handleCreateNewSession}
+              onRefreshSessions={refreshSessionHistory}
               className="text-xs"
             />
           )}
