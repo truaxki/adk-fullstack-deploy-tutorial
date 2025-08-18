@@ -128,3 +128,23 @@ export interface ChatSessionDB {
     // Computed fields
     source: 'supabase' | 'adk' | 'synced';
   }
+
+  /**
+   * Chat Messages table types
+   */
+  export interface ChatMessageDB {
+    id: string;
+    session_id: string;
+    user_id: string;
+    message_type: 'human' | 'ai' | 'system';
+    message_content: any; // JSONB
+    message_role?: string;
+    sequence_number: number;
+    created_at: string;
+  }
+
+  export type ChatMessageInsert = Omit<ChatMessageDB, 'id' | 'created_at'>;
+  export type ChatMessageUpdate = Partial<Omit<ChatMessageDB, 'id' | 'created_at'>>;
+  
+  // Export for convenience
+  export type ChatMessage = ChatMessageDB;

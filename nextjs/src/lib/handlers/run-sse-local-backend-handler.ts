@@ -18,6 +18,61 @@ import {
   createBackendConnectionError,
   createStreamingError,
 } from "./error-utils";
+import { updateLastActivity } from "@/lib/utils/session-sync";
+import { messageService } from "@/lib/services/message-service";
+import { supabaseSessionServiceServer } from "@/lib/services/supabase-session-service-server";
+import { createSSEInterceptor } from "./sse-stream-interceptor";
+
+/**
+ * Save messages to Supabase after successful processing
+ */
+async function saveMessagesToSupabase(requestData: ProcessedStreamRequest) {
+  try {
+    console.log("💾 [HANDLER] Saving messages to Supabase for session:", requestData.sessionId);
+    
+    // First, we need to find the Supabase session ID from the ADK session ID
+    const sessionResult = await supabaseSessionServiceServer.findSessionByAdkId(requestData.sessionId);
+    
+    if (!sessionResult.success || !sessionResult.data) {
+      console.warn("⚠️ [HANDLER] Supabase session not found for ADK session:", requestData.sessionId);
+      return;
+    }
+    
+    const supabaseSessionId = sessionResult.data.id;
+    const userId = sessionResult.data.user_id;
+    
+    // Get the next sequence number
+    const sequenceNumber = await messageService.getNextSequenceNumber(supabaseSessionId);
+    
+    // Save the user message
+    const userMessageResult = await messageService.saveMessage(
+      supabaseSessionId,
+      userId,
+      'human',
+      {
+        text: requestData.message,
+        role: 'user'
+      },
+      sequenceNumber
+    );
+    
+    if (userMessageResult.success) {
+      console.log("✅ [HANDLER] User message saved to Supabase");
+    } else {
+      console.error("❌ [HANDLER] Failed to save user message:", userMessageResult.error);
+    }
+    
+    // Update session activity
+    await updateLastActivity(requestData.sessionId, true);
+    
+    // Note: AI response will be saved when it's received through the SSE stream
+    // This would require parsing the SSE stream, which is complex for streaming responses
+    // For now, we're just saving the user message
+    
+  } catch (error) {
+    console.error("❌ [HANDLER] Error saving messages to Supabase:", error);
+  }
+}
 
 /**
  * Validate that a response is suitable for streaming
@@ -108,9 +163,19 @@ export async function handleLocalBackendStreamRequest(
       "local_backend"
     );
 
-    // The local ADK backend produces a valid SSE stream, so we forward it directly
-    // without the complex processing needed for Agent Engine.
-    return new Response(response.body, {
+    // Save user message to Supabase (non-blocking)
+    saveMessagesToSupabase(requestData).catch(error => {
+      console.warn("⚠️ Failed to save messages to Supabase:", error);
+    });
+
+    // Create SSE interceptor to capture and save AI responses
+    const interceptor = createSSEInterceptor(requestData.sessionId, requestData.userId);
+    
+    // Pipe the response through the interceptor
+    const interceptedStream = response.body!.pipeThrough(interceptor);
+
+    // Return the intercepted stream
+    return new Response(interceptedStream, {
       status: 200,
       headers: SSE_HEADERS,
     });
