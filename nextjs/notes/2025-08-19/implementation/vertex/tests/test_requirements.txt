@@ -1,0 +1,19 @@
+# Requirements for GCP Setup Test Script
+# Install with: pip install -r test_requirements.txt
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Core Google Cloud libraries
+google-cloud-aiplatform>=1.38.0
+google-cloud-storage>=2.10.0
+google-cloud-resource-manager>=1.10.0
+google-cloud-iam>=2.12.0
+google-auth>=2.23.0
+
+# Vertex AI and ADK dependencies
+vertexai>=1.38.0
+google-adk[vertexai]>=1.0.0
+
+# Optional: For colored output on Windows
+colorama>=0.4.6
