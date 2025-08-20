@@ -3,9 +3,12 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ClearTokensButton } from '@/components/auth/ClearTokensButton'
 
 type AuthMode = 'signin' | 'signup' | 'reset'
+
+// Asset imports
+const logoImg = "/AgentLocker-.png"
+const clusterGif = "/cluster-14-rotation.gif"
 
 function AuthForm() {
   const [mode, setMode] = useState<AuthMode>('signin')
@@ -140,198 +143,231 @@ function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {mode === 'signin' && 'Sign in to your account'}
-            {mode === 'signup' && 'Create a new account'}
-            {mode === 'reset' && 'Reset your password'}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {mode === 'signin' && (
-              <>
-                Or{' '}
-                <button
-                  onClick={() => setMode('signup')}
-                  className="font-medium text-blue-600 hover:text-blue-500"
-                >
-                  create a new account
-                </button>
-              </>
-            )}
-            {mode === 'signup' && (
-              <>
-                Or{' '}
-                <button
-                  onClick={() => setMode('signin')}
-                  className="font-medium text-blue-600 hover:text-blue-500"
-                >
-                  sign in to existing account
-                </button>
-              </>
-            )}
-            {mode === 'reset' && (
-              <>
-                Or{' '}
-                <button
-                  onClick={() => setMode('signin')}
-                  className="font-medium text-blue-600 hover:text-blue-500"
-                >
-                  return to sign in
-                </button>
-              </>
-            )}
-          </p>
-        </div>
-
-        {/* OAuth Buttons - Not shown in reset mode */}
-        {mode !== 'reset' && (
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <button
-              onClick={() => handleOAuthSignIn('google')}
-              disabled={loading}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              <span className="ml-2">Google</span>
-            </button>
-
-            <button
-              onClick={() => handleOAuthSignIn('github')}
-              disabled={loading}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-              </svg>
-              <span className="ml-2">GitHub</span>
-            </button>
+    <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      {/* Left Panel - Auth Form */}
+      <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 bg-white lg:max-w-[50%] relative">
+        <div className="w-full max-w-lg flex flex-col items-center space-y-8 flex-1 justify-center">
+          {/* Logo - Wider Container */}
+          <div className="w-full flex justify-center">
+            <img 
+              src={logoImg}
+              alt="AgentLocker"
+              className="h-32 w-auto object-contain"
+            />
           </div>
-        )}
 
-        {mode !== 'reset' && (
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-50 text-gray-500">Or continue with email</span>
-            </div>
-          </div>
-        )}
+          {/* Form Container */}
+          <div className="w-full max-w-md space-y-8">
 
-        {/* Email Form */}
-        <form className="mt-8 space-y-6" onSubmit={handleEmailAuth}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            {mode === 'signup' && (
-              <div>
-                <label htmlFor="full-name" className="sr-only">
-                  Full Name
-                </label>
-                <input
-                  id="full-name"
-                  name="fullName"
-                  type="text"
-                  autoComplete="name"
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Full Name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
+          {/* OAuth Section */}
+          {mode !== 'reset' && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-sm text-gray-600 font-semibold uppercase tracking-wider">Continue with</p>
               </div>
-            )}
-            
-            <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 ${
-                  mode === 'signup' ? '' : 'rounded-t-md'
-                } focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            
-            {mode !== 'reset' && (
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-
-          {mode === 'signin' && (
-            <div className="flex items-center justify-between">
-              <div className="text-sm">
+              <div className="grid grid-cols-2 gap-3">
                 <button
-                  type="button"
-                  onClick={() => setMode('reset')}
-                  className="font-medium text-blue-600 hover:text-blue-500"
+                  onClick={() => handleOAuthSignIn('google')}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
                 >
-                  Forgot your password?
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                    <g transform="translate(3 2)">
+                      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                      <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.039l3.007-2.332z"/>
+                      <path fill="#EA4335" d="M9 3.582c1.321 0 2.508.454 3.442 1.346l2.582-2.582C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.582 9 3.582z"/>
+                    </g>
+                  </svg>
+                  <span className="text-gray-700 font-medium">Google</span>
+                </button>
+
+                <button
+                  onClick={() => handleOAuthSignIn('github')}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl hover:border-gray-800 hover:bg-gray-50 hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
+                >
+                  <svg className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                  </svg>
+                  <span className="text-gray-700 font-medium">GitHub</span>
                 </button>
               </div>
             </div>
           )}
 
-          {message && (
-            <div className={`rounded-md p-4 ${
-              message.type === 'success' 
-                ? 'bg-green-50 text-green-800' 
-                : 'bg-red-50 text-red-800'
-            }`}>
-              <p className="text-sm">{message.text}</p>
+          {/* Divider with OR */}
+          {mode !== 'reset' && (
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t-2 border-gray-100" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-4 bg-white text-gray-500 font-semibold uppercase tracking-wider">Or</span>
+              </div>
             </div>
           )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Loading...' : (
-                mode === 'signin' ? 'Sign in' :
-                mode === 'signup' ? 'Sign up' :
-                'Send reset email'
+          {/* Email Form */}
+          <div className="space-y-4">
+            <form onSubmit={handleEmailAuth} className="space-y-4">
+              {mode === 'signup' && (
+                <div>
+                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name
+                  </label>
+                  <input
+                    id="fullName"
+                    type="text"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-all duration-200 placeholder:text-gray-400 placeholder:font-normal text-gray-900 font-medium"
+                  />
+                </div>
               )}
-            </button>
+              
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-all duration-200 placeholder:text-gray-400 placeholder:font-normal text-gray-900 font-medium"
+                />
+              </div>
+
+              {mode !== 'reset' && (
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-all duration-200 placeholder:text-gray-400 placeholder:font-normal text-gray-900 font-medium"
+                  />
+                </div>
+              )}
+
+              {message && (
+                <div className={`rounded-lg p-4 text-sm ${
+                  message.type === 'success' 
+                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                    : 'bg-red-50 text-red-600 border border-red-200'
+                }`}>
+                  {message.text}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </span>
+                ) : (
+                  mode === 'signin' ? 'Sign In' :
+                  mode === 'signup' ? 'Create Account' :
+                  'Send Reset Link'
+                )}
+              </button>
+            </form>
           </div>
-        </form>
+
+          </div>
+        </div>
         
-        {/* Debug Token Clear - Only show in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-6 text-center">
-            <ClearTokensButton />
+        {/* Footer - Fixed at bottom */}
+        <div className="w-full max-w-lg mt-8">
+          <div className="border-t border-gray-100 pt-6">
+            <div className="space-y-4">
+              {/* Forgot Password Link for Sign In */}
+              {mode === 'signin' && (
+                <div className="text-center">
+                  <button
+                    onClick={() => setMode('reset')}
+                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+              
+              {/* Back to Sign In for Reset */}
+              {mode === 'reset' && (
+                <div className="text-center text-sm">
+                  <span className="text-gray-600">
+                    Remember your password?{' '}
+                    <button
+                      onClick={() => setMode('signin')}
+                      className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+                    >
+                      Back to sign in
+                    </button>
+                  </span>
+                </div>
+              )}
+
+              {/* Terms and Privacy - Clean footer bar */}
+              <div className="text-center py-4 bg-gray-50 -mx-8 px-8 rounded-t-2xl">
+                <p className="text-xs text-gray-400">
+                  By continuing, you agree to our{' '}
+                  <a href="#" className="underline hover:text-gray-600 transition-colors">Terms</a>
+                  {' '}and{' '}
+                  <a href="#" className="underline hover:text-gray-600 transition-colors">Privacy Policy</a>
+                </p>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+      </div>
+
+      {/* Right Panel - Animated Visualization (Desktop Only) */}
+      <div className="hidden lg:flex flex-1 items-center justify-center p-12 relative overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl animate-pulse" style={{animationDelay: '4s'}}></div>
+        </div>
+        
+        <div className="relative w-full max-w-2xl flex flex-col items-center z-10">
+          {/* White Container with shadow and hover effect */}
+          <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 w-full transform transition-all duration-500 hover:scale-[1.02] hover:shadow-3xl">
+            <img 
+              src={clusterGif} 
+              alt="Embedding cluster visualization"
+              className="w-full h-auto rounded-2xl"
+            />
+          </div>
+          
+          {/* Caption - Outside the box with better styling */}
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-gray-800 font-semibold text-lg">
+              Research Cluster Available - Q2 2025
+            </p>
+            <p className="text-sm text-gray-600">
+              Early Access • v0.2 • Last updated Aug 20
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -340,9 +376,12 @@ function AuthForm() {
 export default function AuthPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse">
-          <div className="h-12 w-48 bg-gray-200 rounded"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="space-y-3">
+          <div className="flex justify-center">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <p className="text-sm text-gray-500">Loading...</p>
         </div>
       </div>
     }>
