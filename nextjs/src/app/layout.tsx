@@ -18,6 +18,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 0.85,  // Zoomed out to 85% for better overview
+  maximumScale: 1,
+  userScalable: true,  // Allow users to zoom if needed
+};
+
 export default function RootLayout({
   children,
 }: {
