@@ -91,9 +91,12 @@ export async function fetchActiveSessionsAction(
     });
 
     // Wait for all session details to be fetched
-    const activeSessions: ActiveSession[] = await Promise.all(
+    const allSessions: ActiveSession[] = await Promise.all(
       sessionDetailsPromises
     );
+
+    // Filter out sessions with no messages
+    const activeSessions = allSessions.filter(session => session.messageCount > 0);
 
     return {
       success: true,
