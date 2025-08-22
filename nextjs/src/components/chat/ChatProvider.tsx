@@ -27,7 +27,8 @@ export interface ChatContextValue {
     id: string;
     title: string;
     lastActivity: Date | null;
-    source: 'supabase' | 'adk';
+    source: 'vertex-ai' | 'adk';
+    messageCount?: number;
   }>;
   loadingSessions: boolean;
 
