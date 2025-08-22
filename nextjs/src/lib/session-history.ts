@@ -145,31 +145,40 @@ export class AdkSessionService {
           : Array.isArray(responseData) 
             ? responseData 
             : [];
-        const sessions: AdkSession[] = rawSessions.map(
-          (session: {
-            name?: string;
-            createTime?: string;
-            updateTime?: string;
-            userId?: string;
-          }) => {
-            // Extract session ID from name field: "projects/.../sessions/SESSION_ID"
-            const sessionId = session.name
-              ? session.name.split("/sessions/")[1]
-              : null;
+        const sessions: AdkSession[] = rawSessions
+          .map(
+            (session: {
+              name?: string;
+              createTime?: string;
+              updateTime?: string;
+              userId?: string;
+            }) => {
+              // Extract session ID from name field: "projects/.../sessions/SESSION_ID"
+              const sessionId = session.name
+                ? session.name.split("/sessions/")[1]
+                : null;
 
-            return {
-              id: sessionId,
-              app_name: getAdkAppName(), // Add app_name for compatibility
-              user_id: session.userId,
-              state: null,
-              last_update_time: session.updateTime || session.createTime,
-              // Keep original fields for reference
-              name: session.name,
-              createTime: session.createTime,
-              updateTime: session.updateTime,
-            };
-          }
-        );
+              return {
+                id: sessionId,
+                app_name: getAdkAppName(), // Add app_name for compatibility
+                user_id: session.userId,
+                state: null,
+                last_update_time: session.updateTime || session.createTime,
+                // Keep original fields for reference
+                name: session.name,
+                createTime: session.createTime,
+                updateTime: session.updateTime,
+              };
+            }
+          )
+          // SECURITY FIX: Filter sessions to only show those belonging to the requesting user
+          .filter((session: AdkSession) => {
+            const sessionBelongsToUser = session.user_id === userId;
+            if (!sessionBelongsToUser) {
+              console.log(`🔒 [ADK SESSION SERVICE] Filtered out session ${session.id} - belongs to user ${session.user_id}, not ${userId}`);
+            }
+            return sessionBelongsToUser;
+          });
 
         return {
           sessions: Array.isArray(sessions) ? sessions : [],
