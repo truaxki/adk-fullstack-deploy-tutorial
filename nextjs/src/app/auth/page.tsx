@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 type AuthMode = 'signin' | 'signup' | 'reset'
 
 // Asset imports
-const logoImg = "/AgentLocker-.png"
+const logoImg = "/AgentLocker-logo.png"
 const clusterGif = "/cluster-14-rotation.gif"
 
 function AuthForm() {
@@ -152,7 +152,7 @@ function AuthForm() {
             <img 
               src={logoImg}
               alt="AgentLocker"
-              className="h-32 w-auto object-contain"
+              className="h-32 w-auto object-contain logo-glow"
             />
           </div>
 
@@ -339,32 +339,70 @@ function AuthForm() {
         </div>
       </div>
 
-      {/* Right Panel - Animated Visualization (Desktop Only) */}
-      <div className="hidden lg:flex flex-1 items-center justify-center p-12 relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl animate-pulse" style={{animationDelay: '4s'}}></div>
+      {/* Right Panel - Data Science Visualization (Desktop Only) */}
+      <div className="hidden lg:flex flex-1 items-center justify-center p-12 relative overflow-hidden bg-card/50">
+        {/* Enhanced Data Science Background */}
+        <div className="absolute inset-0 opacity-5 dark:opacity-10">
+          <div className="absolute top-20 right-20 w-32 h-32 border border-tab10-blue rounded-lg rotate-12 data-point"></div>
+          <div className="absolute bottom-32 left-16 w-24 h-24 border border-tab10-orange rounded-full data-point"></div>
+          <div className="absolute top-1/3 left-1/4 w-16 h-16 border border-tab10-green rounded-lg -rotate-12 data-point"></div>
+          <div className="absolute top-1/2 right-1/3 w-12 h-12 border border-tab10-cyan rounded-full data-point"></div>
+          <div className="absolute bottom-20 right-40 w-20 h-20 border border-tab10-purple rounded-lg rotate-45 data-point"></div>
         </div>
         
         <div className="relative w-full max-w-2xl flex flex-col items-center z-10">
-          {/* White Container with shadow and hover effect */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 w-full transform transition-all duration-500 hover:scale-[1.02] hover:shadow-3xl">
+          {/* Research Platform Container */}
+          <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full transition-all duration-300 hover:shadow-xl research-card">
+            <div className="flex items-center gap-3 mb-4">
+              <img 
+                src={logoImg}
+                alt="AgentLocker"
+                className="w-10 h-10 object-contain logo-glow"
+              />
+              <div>
+                <h3 className="font-semibold text-foreground">AgentLocker Research</h3>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-tab10-green rounded-full"></div>
+                  <span className="text-xs text-muted-foreground font-mono">System Online</span>
+                </div>
+              </div>
+            </div>
             <img 
               src={clusterGif} 
               alt="Embedding cluster visualization"
-              className="w-full h-auto rounded-2xl"
+              className="w-full h-auto rounded-lg border border-border/50"
             />
+            <div className="mt-4 flex justify-between items-center">
+              <div className="flex gap-2">
+                <div className="w-3 h-3 bg-tab10-blue rounded-full"></div>
+                <div className="w-3 h-3 bg-tab10-orange rounded-full"></div>
+                <div className="w-3 h-3 bg-tab10-green rounded-full"></div>
+              </div>
+              <span className="text-xs text-muted-foreground font-mono">Live Data</span>
+            </div>
           </div>
           
-          {/* Caption - Outside the box with better styling */}
-          <div className="mt-6 text-center space-y-2">
-            <p className="text-gray-800 font-semibold text-lg">
-              Research Cluster Available - Q2 2025
+          {/* Research Platform Info */}
+          <div className="mt-6 text-center space-y-3">
+            <div className="flex justify-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-tab10-blue rounded-full"></div>
+                <span className="text-muted-foreground">Clustering</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-tab10-orange rounded-full"></div>
+                <span className="text-muted-foreground">Analysis</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-tab10-green rounded-full"></div>
+                <span className="text-muted-foreground">Insights</span>
+              </div>
+            </div>
+            <p className="text-foreground font-semibold">
+              Advanced Research Platform - Q2 2025
             </p>
-            <p className="text-sm text-gray-600">
-              Early Access • v0.2 • Last updated Aug 20
+            <p className="text-xs text-muted-foreground font-mono">
+              v0.2.1 • Last updated Aug 22 • Tab10 Analytics
             </p>
           </div>
         </div>

@@ -63,38 +63,49 @@
   }
 
   .dark {
-    /* Dark mode with seaborn dark style inspiration */
-    --background: 0 0% 8%;          /* Dark background like seaborn darkgrid */
-    --foreground: 0 0% 92%;
-    --card: 0 0% 12%;               /* Slightly lighter cards */
-    --card-foreground: 0 0% 92%;
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 92%;
+    /* Professional dark mode inspired by data science tools */
+    --background: 0 0% 6%;           /* Deep professional background */
+    --foreground: 0 0% 94%;          /* High contrast text */
+    --card: 0 0% 9%;                /* Card surfaces with subtle elevation */
+    --card-foreground: 0 0% 94%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 94%;
     
-    /* Tab10 colors remain vibrant in dark mode */
+    /* Enhanced tab10 colors for dark mode visibility */
+    --tab10-blue: 210 85% 58%;       /* Brightened blue for dark backgrounds */
+    --tab10-orange: 25 95% 58%;      /* Enhanced orange visibility */
+    --tab10-green: 120 65% 48%;      /* Optimized green for dark mode */
+    --tab10-red: 348 85% 55%;        /* Enhanced red contrast */
+    --tab10-purple: 258 48% 62%;     /* Brighter purple */
+    --tab10-brown: 17 48% 50%;       /* Enhanced brown visibility */
+    --tab10-pink: 300 70% 68%;       /* Brighter pink */
+    --tab10-gray: 0 0% 65%;          /* Lighter gray for visibility */
+    --tab10-olive: 61 68% 52%;       /* Enhanced olive */
+    --tab10-cyan: 188 85% 52%;       /* Brighter cyan */
+    
     --primary: var(--tab10-blue);
     --primary-foreground: 0 0% 98%;
-    --secondary: 210 15% 20%;       /* Dark blue-gray */
-    --secondary-foreground: 0 0% 92%;
-    --muted: 0 0% 16%;              /* Dark muted areas */
-    --muted-foreground: 0 0% 65%;
+    --secondary: 210 20% 18%;        /* Dark secondary with blue tint */
+    --secondary-foreground: 0 0% 94%;
+    --muted: 0 0% 14%;               /* Subtle muted backgrounds */
+    --muted-foreground: 0 0% 70%;    /* Enhanced muted text visibility */
     --accent: var(--tab10-orange);
-    --accent-foreground: 0 0% 15%;
+    --accent-foreground: 0 0% 10%;
     
-    /* Dark mode semantic colors */
+    /* Enhanced semantic colors for dark mode */
     --destructive: var(--tab10-red);
     --destructive-foreground: 0 0% 98%;
     --success: var(--tab10-green);
     --success-foreground: 0 0% 98%;
     --warning: var(--tab10-orange);
-    --warning-foreground: 0 0% 15%;
+    --warning-foreground: 0 0% 10%;
     
-    /* Dark borders and inputs */
-    --border: 0 0% 18%;             /* Subtle dark borders */
-    --input: 0 0% 16%;
+    /* Professional dark borders and inputs */
+    --border: 0 0% 20%;              /* Enhanced border visibility */
+    --input: 0 0% 12%;               /* Dark input backgrounds */
     --ring: var(--tab10-blue);
     
-    /* Tab10 chart colors for dark mode */
+    /* Tab10 chart colors optimized for dark backgrounds */
     --chart-1: var(--tab10-blue);
     --chart-2: var(--tab10-orange);
     --chart-3: var(--tab10-green);
@@ -115,6 +126,16 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  /* Smooth dark mode transitions */
+  * {
+    transition: 
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease;
   }
 }
 
@@ -128,8 +149,9 @@
 
 .dark .seaborn-grid {
   background-image: 
-    linear-gradient(rgba(31, 119, 180, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 119, 180, 0.1) 1px, transparent 1px);
+    linear-gradient(rgba(31, 119, 180, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 119, 180, 0.15) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 /* Data science accent lines */
@@ -163,6 +185,7 @@
 .text-tab10-red { color: hsl(var(--tab10-red)); }
 .text-tab10-purple { color: hsl(var(--tab10-purple)); }
 .text-tab10-cyan { color: hsl(var(--tab10-cyan)); }
+.text-tab10-gray { color: hsl(var(--tab10-gray)); }
 
 .bg-tab10-blue { background-color: hsl(var(--tab10-blue)); }
 .bg-tab10-orange { background-color: hsl(var(--tab10-orange)); }
@@ -170,3 +193,34 @@
 .bg-tab10-red { background-color: hsl(var(--tab10-red)); }
 .bg-tab10-purple { background-color: hsl(var(--tab10-purple)); }
 .bg-tab10-cyan { background-color: hsl(var(--tab10-cyan)); }
+.bg-tab10-gray { background-color: hsl(var(--tab10-gray)); }
+
+/* Dark mode enhancements */
+.dark .logo-glow {
+  filter: drop-shadow(0 0 8px hsl(var(--tab10-blue) / 0.3));
+}
+
+/* Enhanced data visualization elements for dark mode */
+.dark .data-point {
+  box-shadow: 0 0 6px hsl(var(--tab10-blue) / 0.4);
+}
+
+.dark .accent-line-blue { 
+  border-left-color: hsl(var(--tab10-blue));
+  box-shadow: -2px 0 4px hsl(var(--tab10-blue) / 0.2);
+}
+
+.dark .accent-line-orange { 
+  border-left-color: hsl(var(--tab10-orange));
+  box-shadow: -2px 0 4px hsl(var(--tab10-orange) / 0.2);
+}
+
+/* Professional dark mode card styling */
+.dark .research-card {
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(0 0% 11%));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 
+    0 4px 6px hsl(0 0% 0% / 0.3),
+    0 1px 3px hsl(0 0% 0% / 0.2),
+    inset 0 1px 0 hsl(0 0% 100% / 0.1);
+}

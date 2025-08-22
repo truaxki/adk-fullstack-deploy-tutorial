@@ -108,9 +108,9 @@ export function ChatLayout(): React.JSX.Element {
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
             <img 
-              src="/AgentLocker-.png"
+              src="/AgentLocker-logo.png"
               alt="AgentLocker"
-              className="w-8 h-8 object-contain"
+              className="w-8 h-8 object-contain logo-glow"
             />
             <div className="flex flex-col">
               <span className="font-semibold text-foreground text-sm">AgentLocker</span>
@@ -244,9 +244,9 @@ export function ChatLayout(): React.JSX.Element {
               </Button>
               <div className="flex items-center gap-3">
                 <img 
-                  src="/AgentLocker-.png"
+                  src="/AgentLocker-logo.png"
                   alt="AgentLocker"
-                  className="w-6 h-6 object-contain lg:hidden"
+                  className="w-6 h-6 object-contain lg:hidden logo-glow"
                 />
                 {sessionId && (
                   <div className="flex items-center gap-2">
@@ -272,9 +272,9 @@ export function ChatLayout(): React.JSX.Element {
                 <div className="text-center max-w-md">
                   <div className="mb-6">
                     <img 
-                      src="/AgentLocker-.png"
+                      src="/AgentLocker-logo.png"
                       alt="AgentLocker"
-                      className="w-20 h-20 mx-auto mb-4 object-contain"
+                      className="w-20 h-20 mx-auto mb-4 object-contain logo-glow"
                     />
                     <div className="w-12 h-1 bg-tab10-blue mx-auto mb-2"></div>
                     <div className="w-6 h-1 bg-tab10-orange mx-auto"></div>
@@ -303,7 +303,7 @@ export function ChatLayout(): React.JSX.Element {
                 {!isLoadingHistory && messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full p-4">
                     <div className="text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-tab10-blue/10 to-tab10-orange/10 rounded-xl flex items-center justify-center">
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-tab10-blue/10 to-tab10-orange/10 rounded-xl flex items-center justify-center research-card">
                         <MessageCircle className="w-8 h-8 text-tab10-blue" strokeWidth={1.5} />
                       </div>
                       <h3 className="text-lg font-medium text-foreground mb-2">
