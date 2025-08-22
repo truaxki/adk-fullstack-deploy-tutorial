@@ -24,7 +24,8 @@ interface SessionSelectorProps {
     id: string;
     title: string;
     lastActivity: Date | null;
-    source: 'supabase' | 'adk';
+    source: 'vertex-ai' | 'adk';
+    messageCount?: number;
   }>;
   loadingSessions: boolean;
   onSessionSelect: (sessionId: string) => void;
