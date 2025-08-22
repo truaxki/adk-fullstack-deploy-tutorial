@@ -296,6 +296,9 @@ export function DesktopSidebar({
                     <span className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">
                       {session.source}
                     </span>
+                    {session.messageCount !== undefined && (
+                      <span>• {session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
+                    )}
                     {session.lastActivity && (
                       <span>• {session.lastActivity.toLocaleDateString()}</span>
                     )}
