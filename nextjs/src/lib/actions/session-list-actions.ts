@@ -1,6 +1,12 @@
 "use server";
 
 import { listUserSessions, getSessionWithEvents } from "@/lib/session-history";
+import { 
+  extractFirstUserQuery, 
+  extractFullUserQuery, 
+  generateFallbackTitle,
+  isQueryMeaningful 
+} from "@/lib/session-queries";
 
 /**
  * Server Action for fetching user's active sessions from ADK backend
@@ -14,6 +20,8 @@ export interface ActiveSession {
   lastUpdateTime: Date | null;
   messageCount: number;
   title?: string;
+  querySnippet?: string;
+  fullQuery?: string;
 }
 
 export interface SessionListResult {
@@ -39,6 +47,15 @@ export async function fetchActiveSessionsAction(
         );
         const messageCount = sessionWithEvents?.events?.length || 0;
 
+        // Extract user queries from session events
+        const events = sessionWithEvents?.events || [];
+        const querySnippet = extractFirstUserQuery(events as unknown as Record<string, unknown>[]);
+        const fullQuery = extractFullUserQuery(events as unknown as Record<string, unknown>[]);
+        
+        // Generate appropriate title - prefer meaningful query snippet, fallback to generic
+        const fallbackTitle = generateFallbackTitle(session.id, session.last_update_time ? new Date(session.last_update_time) : undefined);
+        const displayTitle = isQueryMeaningful(querySnippet) ? querySnippet : fallbackTitle;
+
         return {
           id: session.id,
           userId: session.user_id,
@@ -47,7 +64,9 @@ export async function fetchActiveSessionsAction(
             ? new Date(session.last_update_time)
             : null,
           messageCount,
-          title: `Session ${session.id.substring(0, 8)}`, // Generate a title from session ID
+          title: displayTitle,
+          querySnippet: isQueryMeaningful(querySnippet) ? querySnippet : undefined,
+          fullQuery: fullQuery || undefined,
         };
       } catch (error) {
         console.warn(
@@ -55,6 +74,7 @@ export async function fetchActiveSessionsAction(
           error
         );
         // Return session with 0 message count if events fetch fails
+        const fallbackTitle = generateFallbackTitle(session.id, session.last_update_time ? new Date(session.last_update_time) : undefined);
         return {
           id: session.id,
           userId: session.user_id,
@@ -63,7 +83,9 @@ export async function fetchActiveSessionsAction(
             ? new Date(session.last_update_time)
             : null,
           messageCount: 0,
-          title: `Session ${session.id.substring(0, 8)}`,
+          title: fallbackTitle,
+          querySnippet: undefined,
+          fullQuery: undefined,
         };
       }
     });

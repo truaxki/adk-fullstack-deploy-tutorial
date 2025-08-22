@@ -206,8 +206,13 @@ export function ChatLayout(): React.JSX.Element {
                 >
                   <div className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${session.id === sessionId ? 'bg-tab10-blue' : 'bg-muted'}`}></div>
                   <div className="flex-1 min-w-0 text-left">
-                    <div className="text-sm font-medium truncate">{session.title}</div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <div 
+                      className="text-sm font-medium truncate" 
+                      title={session.fullQuery || session.querySnippet || session.title}
+                    >
+                      {session.querySnippet || session.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2">
                       <span className={`px-1.5 py-0.5 rounded text-xs font-mono ${
                         session.source === 'adk' ? 'bg-tab10-green/10 text-tab10-green' :
                         session.source === 'vertex-ai' ? 'bg-tab10-orange/10 text-tab10-orange' :
@@ -215,9 +220,9 @@ export function ChatLayout(): React.JSX.Element {
                       }`}>
                         {session.source}
                       </span>
-                      {session.messageCount !== undefined && (
-                        <span>• {session.messageCount}</span>
-                      )}
+                      <span className="font-mono text-tab10-orange">
+                        {session.id.substring(0, 8)}
+                      </span>
                     </div>
                   </div>
                 </Button>

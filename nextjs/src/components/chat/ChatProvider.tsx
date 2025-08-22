@@ -29,6 +29,8 @@ export interface ChatContextValue {
     lastActivity: Date | null;
     source: 'vertex-ai' | 'adk';
     messageCount?: number;
+    querySnippet?: string;
+    fullQuery?: string;
   }>;
   loadingSessions: boolean;
 

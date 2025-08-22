@@ -26,6 +26,8 @@ interface SessionSelectorProps {
     lastActivity: Date | null;
     source: 'vertex-ai' | 'adk';
     messageCount?: number;
+    querySnippet?: string;
+    fullQuery?: string;
   }>;
   loadingSessions: boolean;
   onSessionSelect: (sessionId: string) => void;
@@ -138,11 +140,19 @@ export function SessionSelector({
                     >
                       <div className="flex flex-col items-start w-full min-w-0">
                         <div className="flex items-center gap-2 w-full">
-                          <span className="font-medium text-slate-100 text-sm truncate flex-1">
-                            {session.title}
+                          <span 
+                            className="font-medium text-slate-100 text-sm truncate flex-1"
+                            title={session.fullQuery || session.querySnippet || session.title}
+                          >
+                            {session.querySnippet || session.title}
                           </span>
                           <span className="text-xs px-2 py-1 bg-slate-600 rounded text-slate-300 flex-shrink-0">
                             {session.source}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                          <span className="font-mono">
+                            {session.id.substring(0, 8)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-300 mt-1">
