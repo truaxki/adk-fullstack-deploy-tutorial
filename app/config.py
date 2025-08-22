@@ -24,11 +24,11 @@ def load_environment_variables() -> None:
         env_file = Path(__file__).parent / ".env"
         if env_file.exists():
             load_dotenv(env_file)
-            print(f"✅ Loaded environment variables from {env_file}")
+            print(f"[OK] Loaded environment variables from {env_file}")
         else:
-            print(f"ℹ️  No .env file found at {env_file}")
+            print(f"[INFO] No .env file found at {env_file}")
     except ImportError:
-        print("ℹ️  python-dotenv not installed, skipping .env file loading")
+        print("[INFO] python-dotenv not installed, skipping .env file loading")
 
 
 # =============================================================================
@@ -127,7 +127,7 @@ class DeploymentConfiguration:
 def initialize_vertex_ai(config: AgentConfiguration) -> None:
     """Initialize Vertex AI with the provided configuration."""
     try:
-        print("\n🔧 Initializing Vertex AI...")
+        print("\n[INIT] Initializing Vertex AI...")
         print(f"  Project: {config.project_id}")
         print(f"  Location: {config.location}")
         print(f"  Staging Bucket: {config.staging_bucket or 'Not set'}")
@@ -142,11 +142,11 @@ def initialize_vertex_ai(config: AgentConfiguration) -> None:
         else:
             vertexai.init(project=config.project_id, location=config.location)
 
-        print(f"✅ Vertex AI initialized successfully!")
+        print(f"[OK] Vertex AI initialized successfully!")
 
         if not config.staging_bucket:
             print(
-                "ℹ️  Add GOOGLE_CLOUD_STAGING_BUCKET to .env for Agent Engine deployment"
+                "[INFO] Add GOOGLE_CLOUD_STAGING_BUCKET to .env for Agent Engine deployment"
             )
 
     except Exception as e:
@@ -231,7 +231,7 @@ config = AgentConfiguration()
 initialize_vertex_ai(config)
 
 # Print summary
-print("\n📋 Configuration Summary:")
+print("\n[CONFIG] Configuration Summary:")
 print(f"  Agent Name: {config.deployment_name}")
 print(f"  Internal Name: {config.internal_agent_name}")
 print(f"  Model: {config.model}")

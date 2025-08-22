@@ -13,6 +13,7 @@ from typing import Any
 
 import vertexai
 from google.adk.artifacts import GcsArtifactService
+from google.adk.sessions import VertexAiSessionService
 from google.cloud import logging as google_cloud_logging
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, export
@@ -32,6 +33,29 @@ class AgentEngineApp(AdkApp):
 
     This class extends the base ADK app with logging, tracing, and feedback capabilities.
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize with VertexAI session service if not provided."""
+        # Add session service builder if not provided
+        if 'session_service_builder' not in kwargs:
+            kwargs['session_service_builder'] = self._create_session_service_builder()
+        super().__init__(*args, **kwargs)
+    
+    @staticmethod
+    def _create_session_service_builder():
+        """Create VertexAI Session Service builder for persistent sessions."""
+        def session_service_builder():
+            project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+            location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+            
+            if not project_id:
+                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
+            
+            return VertexAiSessionService(
+                project=project_id,
+                location=location
+            )
+        return session_service_builder
 
     def set_up(self) -> None:
         """Set up logging and tracing for the agent engine app."""
@@ -158,12 +182,26 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
         remote_agent = agent_engines.create(**agent_config)
 
     # Step 9: Save deployment metadata
+    # Extract the agent engine ID from the resource name
+    # Format: projects/{project}/locations/{location}/reasoningEngines/{engine_id}
+    agent_engine_id = remote_agent.resource_name.split("/")[-1]
+    
     metadata = {
         "remote_agent_engine_id": remote_agent.resource_name,
+        "agent_engine_id": agent_engine_id,
         "deployment_timestamp": datetime.datetime.now().isoformat(),
         "agent_name": deployment_config.agent_name,
         "project": deployment_config.project,
         "location": deployment_config.location,
+        "session_service": {
+            "type": "VertexAiSessionService",
+            "persistent": True,
+            "configuration": {
+                "project": deployment_config.project,
+                "location": deployment_config.location,
+                "agent_engine_id": agent_engine_id
+            }
+        }
     }
 
     logs_dir = Path("logs")
