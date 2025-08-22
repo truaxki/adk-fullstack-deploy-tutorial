@@ -88,7 +88,7 @@ export function ChatLayout(): React.JSX.Element {
   };
 
   return (
-    <div className="flex h-dvh bg-background text-foreground">
+    <div className="flex h-dvh bg-background text-foreground seaborn-grid">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div 
@@ -107,10 +107,15 @@ export function ChatLayout(): React.JSX.Element {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <MessageCircle className="w-4 h-4 text-primary-foreground" />
+            <img 
+              src="/AgentLocker-.png"
+              alt="AgentLocker"
+              className="w-8 h-8 object-contain"
+            />
+            <div className="flex flex-col">
+              <span className="font-semibold text-foreground text-sm">AgentLocker</span>
+              <span className="text-xs text-tab10-orange font-medium">Research Platform</span>
             </div>
-            <span className="font-semibold text-foreground">Chat</span>
           </div>
           <Button
             variant="ghost"
@@ -163,15 +168,14 @@ export function ChatLayout(): React.JSX.Element {
           <Button
             onClick={handleNewChat}
             disabled={isCreatingSession || !user}
-            variant="outline"
-            className="w-full mb-4"
+            className="w-full mb-4 bg-tab10-blue hover:bg-tab10-blue/90 text-white border-0"
           >
             {isCreatingSession ? (
               <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
             ) : (
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4 mr-2" strokeWidth={2} />
             )}
-            {isCreatingSession ? 'Creating...' : 'New Chat'}
+            {isCreatingSession ? 'Initializing...' : 'New Research Session'}
           </Button>
 
           {/* Error Message */}
@@ -198,17 +202,21 @@ export function ChatLayout(): React.JSX.Element {
                   key={session.id}
                   onClick={() => handleChatSelect(session.id)}
                   variant={session.id === sessionId ? "secondary" : "ghost"}
-                  className="w-full justify-start h-auto p-3"
+                  className={`w-full justify-start h-auto p-3 ${session.id === sessionId ? 'accent-line-blue' : ''}`}
                 >
-                  <MessageCircle className="w-4 h-4 mr-3 flex-shrink-0" />
+                  <div className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${session.id === sessionId ? 'bg-tab10-blue' : 'bg-muted'}`}></div>
                   <div className="flex-1 min-w-0 text-left">
                     <div className="text-sm font-medium truncate">{session.title}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <span className="px-1.5 py-0.5 bg-muted rounded text-xs">
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-mono ${
+                        session.source === 'openai' ? 'bg-tab10-green/10 text-tab10-green' :
+                        session.source === 'vertex-ai' ? 'bg-tab10-orange/10 text-tab10-orange' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
                         {session.source}
                       </span>
                       {session.messageCount !== undefined && (
-                        <span>• {session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
+                        <span>• {session.messageCount}</span>
                       )}
                     </div>
                   </div>
@@ -234,11 +242,19 @@ export function ChatLayout(): React.JSX.Element {
                 <Menu className="w-5 h-5" />
                 <span className="sr-only">Toggle sidebar</span>
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                <img 
+                  src="/AgentLocker-.png"
+                  alt="AgentLocker"
+                  className="w-6 h-6 object-contain lg:hidden"
+                />
                 {sessionId && (
-                  <span className="text-sm text-muted-foreground">
-                    Session: {sessionId.substring(0, 8)}...
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-tab10-green rounded-full"></div>
+                    <span className="text-sm text-muted-foreground font-mono">
+                      {sessionId.substring(0, 8)}
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -253,17 +269,25 @@ export function ChatLayout(): React.JSX.Element {
           <div className="flex-1 overflow-y-auto">
             {!sessionId ? (
               <div className="flex items-center justify-center h-full p-4">
-                <div className="text-center">
-                  <MessageCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">
-                    Welcome to Chat
+                <div className="text-center max-w-md">
+                  <div className="mb-6">
+                    <img 
+                      src="/AgentLocker-.png"
+                      alt="AgentLocker"
+                      className="w-20 h-20 mx-auto mb-4 object-contain"
+                    />
+                    <div className="w-12 h-1 bg-tab10-blue mx-auto mb-2"></div>
+                    <div className="w-6 h-1 bg-tab10-orange mx-auto"></div>
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    AgentLocker Research Platform
                   </h3>
-                  <p className="text-muted-foreground mb-4">
-                    Select a session from the sidebar or create a new chat to get started.
+                  <p className="text-muted-foreground mb-6 leading-relaxed">
+                    Welcome to your research workspace. Start a new session to begin analyzing data and generating insights.
                   </p>
-                  <Button onClick={handleNewChat} disabled={!user}>
+                  <Button onClick={handleNewChat} disabled={!user} className="bg-tab10-blue hover:bg-tab10-blue/90">
                     <Plus className="w-4 h-4 mr-2" />
-                    Start New Chat
+                    Initialize Research Session
                   </Button>
                 </div>
               </div>
@@ -279,13 +303,20 @@ export function ChatLayout(): React.JSX.Element {
                 {!isLoadingHistory && messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full p-4">
                     <div className="text-center">
-                      <MessageCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-tab10-blue/10 to-tab10-orange/10 rounded-xl flex items-center justify-center">
+                        <MessageCircle className="w-8 h-8 text-tab10-blue" strokeWidth={1.5} />
+                      </div>
                       <h3 className="text-lg font-medium text-foreground mb-2">
-                        Start a conversation
+                        Research Session Active
                       </h3>
                       <p className="text-muted-foreground">
-                        Type your message below to begin chatting.
+                        Begin your analysis by typing a research question or data query below.
                       </p>
+                      <div className="flex justify-center mt-4 gap-2">
+                        <div className="w-2 h-2 bg-tab10-blue rounded-full"></div>
+                        <div className="w-2 h-2 bg-tab10-orange rounded-full"></div>
+                        <div className="w-2 h-2 bg-tab10-green rounded-full"></div>
+                      </div>
                     </div>
                   </div>
                 ) : !isLoadingHistory ? (

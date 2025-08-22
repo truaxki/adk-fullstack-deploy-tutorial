@@ -143,9 +143,9 @@ function AuthForm() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="flex min-h-screen bg-background seaborn-grid">
       {/* Left Panel - Auth Form */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 bg-white lg:max-w-[50%] relative">
+      <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 bg-card lg:max-w-[50%] relative border-r border-border">
         <div className="w-full max-w-lg flex flex-col items-center space-y-8 flex-1 justify-center">
           {/* Logo - Wider Container */}
           <div className="w-full flex justify-center">
@@ -222,7 +222,7 @@ function AuthForm() {
                     placeholder="John Doe"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-all duration-200 placeholder:text-gray-400 placeholder:font-normal text-gray-900 font-medium"
+                    className="w-full h-12 px-4 border border-input rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-tab10-blue focus:border-transparent hover:border-tab10-blue/30 transition-all duration-200 placeholder:text-muted-foreground placeholder:font-normal text-foreground font-medium"
                   />
                 </div>
               )}
@@ -254,7 +254,7 @@ function AuthForm() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-all duration-200 placeholder:text-gray-400 placeholder:font-normal text-gray-900 font-medium"
+                    className="w-full h-12 px-4 border border-input rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-tab10-blue focus:border-transparent hover:border-tab10-blue/30 transition-all duration-200 placeholder:text-muted-foreground placeholder:font-normal text-foreground font-medium"
                   />
                 </div>
               )}
@@ -272,7 +272,7 @@ function AuthForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                className="w-full h-12 bg-tab10-blue text-white font-semibold rounded-lg hover:bg-tab10-blue/90 hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="flex items-center justify-center">
