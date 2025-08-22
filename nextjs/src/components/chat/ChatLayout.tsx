@@ -209,7 +209,7 @@ export function ChatLayout(): React.JSX.Element {
                     <div className="text-sm font-medium truncate">{session.title}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <span className={`px-1.5 py-0.5 rounded text-xs font-mono ${
-                        session.source === 'openai' ? 'bg-tab10-green/10 text-tab10-green' :
+                        session.source === 'adk' ? 'bg-tab10-green/10 text-tab10-green' :
                         session.source === 'vertex-ai' ? 'bg-tab10-orange/10 text-tab10-orange' :
                         'bg-muted text-muted-foreground'
                       }`}>
