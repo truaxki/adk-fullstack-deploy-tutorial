@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from '@/lib/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { supabaseSessionService } from '@/lib/services/supabase-session-service';
+import { fetchActiveSessionsAction } from '@/lib/actions/session-list-actions';
 
 export interface UseSessionReturn {
   // State
@@ -12,7 +12,8 @@ export interface UseSessionReturn {
     id: string;
     title: string;
     lastActivity: Date | null;
-    source: 'supabase' | 'adk';
+    source: 'vertex-ai' | 'adk';
+    messageCount?: number;
   }>;
   loadingSessions: boolean;
 
@@ -37,7 +38,8 @@ export function useSession(): UseSessionReturn {
     id: string;
     title: string;
     lastActivity: Date | null;
-    source: 'supabase' | 'adk';
+    source: 'vertex-ai' | 'adk';
+    messageCount?: number;
   }>>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   
@@ -145,7 +147,7 @@ export function useSession(): UseSessionReturn {
     localStorage.setItem("agent-engine-user-id", confirmedUserId);
   }, []);
 
-  // Load session history from Supabase
+  // Load session history from Vertex AI via Agent Engine
   const refreshSessionHistory = useCallback(async (): Promise<void> => {
     console.log('🔄 [useSession] Refreshing session history for user:', userId);
     
@@ -157,27 +159,28 @@ export function useSession(): UseSessionReturn {
 
     try {
       setLoadingSessions(true);
-      console.log('📡 [useSession] Loading sessions from Supabase...');
+      console.log('📡 [useSession] Loading sessions from Vertex AI (Agent Engine)...');
       
-      const result = await supabaseSessionService.loadUserSessions(userId);
+      const result = await fetchActiveSessionsAction(userId);
       
-      console.log('📊 [useSession] Supabase load result:', {
+      console.log('📊 [useSession] Vertex AI load result:', {
         success: result.success,
-        dataLength: result.success ? result.data.length : 0,
+        dataLength: result.success ? result.sessions.length : 0,
         error: !result.success ? result.error : undefined
       });
       
       if (result.success) {
-        const sessions = result.data.map(session => ({
+        const sessions = result.sessions.map(session => ({
           id: session.id,
-          title: session.session_title || `Session ${new Date(session.created_at).toLocaleDateString()}`,
-          lastActivity: session.last_message_at ? new Date(session.last_message_at) : null,
-          source: 'supabase' as const
+          title: session.title || `Session ${new Date(session.lastUpdateTime || Date.now()).toLocaleDateString()}`,
+          lastActivity: session.lastUpdateTime,
+          source: 'vertex-ai' as const,
+          messageCount: session.messageCount
         }));
         
-        console.log('📚 [useSession] Processed sessions:', sessions);
+        console.log('📚 [useSession] Processed Vertex AI sessions:', sessions);
         setSessionHistory(sessions);
-        console.log(`✅ [useSession] Loaded ${sessions.length} sessions from Supabase`);
+        console.log(`✅ [useSession] Loaded ${sessions.length} sessions from Vertex AI`);
       } else {
         console.warn('⚠️ [useSession] Failed to load session history:', result.error);
         setSessionHistory([]);

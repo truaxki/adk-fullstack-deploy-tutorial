@@ -2,28 +2,25 @@
 
 import { Suspense } from "react";
 import { ChatProvider } from "@/components/chat/ChatProvider";
-import { DesktopLayout } from "@/components/chat/DesktopLayout";
-import { DesktopSidebar } from "@/components/chat/DesktopSidebar";
-import { DesktopChatArea } from "@/components/chat/DesktopChatArea";
+import { ChatLayout } from "@/components/chat/ChatLayout";
 
 export default function ChatPageClient(): React.JSX.Element {
   return (
-    <div className="flex flex-col h-screen">
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        <Suspense fallback={<div>Loading chat...</div>}>
-          <ChatProvider>
-            <DesktopLayout>
-              <DesktopSidebar 
-                onTabChange={(tab) => console.log('Tab changed:', tab)}
-                onChatSelect={(chatId) => console.log('Chat selected:', chatId)}
-                onNewChat={() => console.log('New chat')}
-              />
-              <DesktopChatArea />
-            </DesktopLayout>
-          </ChatProvider>
-        </Suspense>
-      </div>
+    <div className="h-dvh flex flex-col">
+      <Suspense
+        fallback={
+          <div className="flex-1 grid place-items-center text-muted-foreground animate-fade-in">
+            <div className="text-center space-y-2">
+              <div className="w-8 h-8 border-2 border-current border-t-transparent rounded-full animate-spin mx-auto" />
+              <span className="text-sm">Loading chat...</span>
+            </div>
+          </div>
+        }
+      >
+        <ChatProvider>
+          <ChatLayout />
+        </ChatProvider>
+      </Suspense>
     </div>
   );
 }
