@@ -14,6 +14,8 @@ export interface UseSessionReturn {
     lastActivity: Date | null;
     source: 'vertex-ai' | 'adk';
     messageCount?: number;
+    querySnippet?: string;
+    fullQuery?: string;
   }>;
   loadingSessions: boolean;
 
@@ -40,6 +42,8 @@ export function useSession(): UseSessionReturn {
     lastActivity: Date | null;
     source: 'vertex-ai' | 'adk';
     messageCount?: number;
+    querySnippet?: string;
+    fullQuery?: string;
   }>>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   
@@ -175,7 +179,9 @@ export function useSession(): UseSessionReturn {
           title: session.title || `Session ${new Date(session.lastUpdateTime || Date.now()).toLocaleDateString()}`,
           lastActivity: session.lastUpdateTime,
           source: 'vertex-ai' as const,
-          messageCount: session.messageCount
+          messageCount: session.messageCount,
+          querySnippet: session.querySnippet,
+          fullQuery: session.fullQuery
         }));
         
         console.log('📚 [useSession] Processed Vertex AI sessions:', sessions);

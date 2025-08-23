@@ -1,9 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(npx tsc:*)",
+      "WebSearch"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\ktrua\\OneDrive\\Desktop\\Code-tutorials\\adk-fullstack-deploy-tutorial"
+    ]
   }
 }
