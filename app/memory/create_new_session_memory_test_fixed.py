@@ -248,36 +248,59 @@ async def create_session_and_test_memory():
         await asyncio.sleep(1)
     
     # =========================================================================
-    # STEP 4: DIRECT MEMORY SEARCH (Alternative Method)
+    # STEP 4: DIRECT MEMORY RETRIEVAL (Using API Client)
     # =========================================================================
     
     print("\n" + "=" * 60)
-    print("STEP 4: DIRECT MEMORY SEARCH")
+    print("STEP 4: DIRECT MEMORY RETRIEVAL")
     print("=" * 60)
     
     try:
-        print("🔍 Performing direct memory search...")
+        print("🔍 Retrieving memories using API client...")
         
-        direct_query = "Austin Texas Hyde Park neighborhood restaurants"
-        print(f"   Query: '{direct_query}'")
+        # Import the Vertex AI client for direct API access
+        import vertexai
+        from google.cloud import aiplatform_v1beta1
         
-        search_results = await memory_service.search_memory(
-            query=direct_query,
-            user_id=USER_ID,
-            top_k=3
+        # Initialize Vertex AI client
+        vertexai.init(project=PROJECT_ID, location=LOCATION)
+        client = vertexai.Client(project=PROJECT_ID, location=LOCATION)
+        
+        # Build the agent engine name
+        agent_engine_name = f"projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines/{AGENT_ENGINE_ID}"
+        print(f"   Agent Engine: {agent_engine_name}")
+        print(f"   User ID: {USER_ID}")
+        
+        # Retrieve memories for the user using the API client
+        # This retrieves ALL memories for the user (no query-based filtering)
+        retrieved_memories = list(
+            client.agent_engines.retrieve_memories(
+                name=agent_engine_name,
+                scope={"user_id": USER_ID}
+            )
         )
         
-        if search_results:
-            print(f"\n✅ Found {len(search_results)} results:")
-            for i, result in enumerate(search_results, 1):
-                print(f"\n   Result #{i}:")
-                print(f"   Score: {result.get('score', 0):.3f}")
-                print(f"   Content: {result.get('content', 'N/A')[:150]}...")
+        if retrieved_memories:
+            print(f"\n✅ Found {len(retrieved_memories)} memories for user '{USER_ID}':")
+            for i, memory_item in enumerate(retrieved_memories[:5], 1):  # Show first 5
+                # The memory_item contains a 'memory' object with the actual fact
+                if hasattr(memory_item, 'memory') and hasattr(memory_item.memory, 'fact'):
+                    fact = memory_item.memory.fact
+                    print(f"\n   Memory #{i}:")
+                    print(f"   Fact: {fact[:200]}..." if len(fact) > 200 else f"   Fact: {fact}")
+                else:
+                    print(f"\n   Memory #{i}: {str(memory_item)[:150]}...")
         else:
-            print("❌ No direct search results found")
+            print("❌ No memories found for this user")
+            print("   This might be normal if memories haven't been generated yet")
+            print("   Memory generation can take a few moments after session ingestion")
             
     except Exception as e:
-        print(f"⚠️  Direct search not available: {e}")
+        print(f"⚠️  Memory retrieval not available: {e}")
+        print(f"\n   This might mean:")
+        print(f"   1. Memory Bank is still processing the session")
+        print(f"   2. The ADK version needs updating")
+        print(f"   3. Additional permissions are needed")
     
     # =========================================================================
     # SUMMARY
