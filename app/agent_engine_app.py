@@ -14,7 +14,7 @@ from typing import Any
 import vertexai
 from google.adk.artifacts import GcsArtifactService
 from google.adk.sessions import VertexAiSessionService
-from google.adk.memory import VertexAiMemoryBankService  # Add Memory Bank
+# Note: Memory Bank is auto-configured by Agent Engine when deployed
 from google.cloud import logging as google_cloud_logging
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, export
@@ -72,25 +72,9 @@ class MemoryEnabledAgentEngineApp(AdkApp):
             )
         return session_service_builder
     
-    @staticmethod
-    def _create_memory_service_builder():
-        """Create VertexAI Memory Bank Service builder for persistent memories."""
-        def memory_service_builder():
-            project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-            location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-            agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
-            
-            if not project_id:
-                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
-            
-            # When deployed to Agent Engine, this is auto-configured
-            # For local testing, we need to specify the agent engine ID
-            return VertexAiMemoryBankService(
-                project=project_id,
-                location=location,
-                agent_engine_id=agent_engine_id  # Add this for local testing
-            )
-        return memory_service_builder
+    # Note: Memory Bank service is automatically configured by Agent Engine
+    # No need for explicit memory_service_builder - the platform handles it
+    # The load_memory tool in the agent will automatically connect to Memory Bank
 
     def set_up(self) -> None:
         """Set up logging, tracing, and memory services."""
@@ -139,7 +123,6 @@ class MemoryEnabledAgentEngineApp(AdkApp):
             agent=copy.deepcopy(template_attributes["agent"]),
             enable_tracing=bool(template_attributes.get("enable_tracing", False)),
             session_service_builder=template_attributes.get("session_service_builder"),
-            memory_service_builder=template_attributes.get("memory_service_builder"),
             artifact_service_builder=template_attributes.get("artifact_service_builder"),
             env_vars=template_attributes.get("env_vars"),
         )
@@ -199,11 +182,12 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
 
     # Step 6: Create the memory-enabled agent engine app
     agent_engine_app = MemoryEnabledAgentEngineApp(
-        agent=root_agent,  # This is the memory-enabled agent
+        agent=root_agent,  # This is the memory-enabled agent with load_memory tool
         artifact_service_builder=lambda: GcsArtifactService(
             bucket_name=artifacts_bucket_name
-        ),
-        # Memory service is automatically configured when deployed
+        )
+        # Note: Memory Bank service is automatically configured by Agent Engine
+        # The load_memory tool will connect to it automatically
     )
 
     # Step 7: Configure the agent for deployment
