@@ -112,14 +112,14 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
     Returns:
         The deployed agent engine instance
     """
-    print("🚀 Starting Agent Engine deployment...")
+    print("Starting Agent Engine deployment...")
 
     # Step 1: Get deployment configuration
     deployment_config = get_deployment_config()
-    print(f"📋 Deploying agent: {deployment_config.agent_name}")
-    print(f"📋 Project: {deployment_config.project}")
-    print(f"📋 Location: {deployment_config.location}")
-    print(f"📋 Staging bucket: {deployment_config.staging_bucket}")
+    print(f"Deploying agent: {deployment_config.agent_name}")
+    print(f"Project: {deployment_config.project}")
+    print(f"Location: {deployment_config.location}")
+    print(f"Staging bucket: {deployment_config.staging_bucket}")
 
     # Step 2: Set up environment variables for the deployed agent
     env_vars = {}
@@ -132,7 +132,7 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
         f"{deployment_config.project}-{deployment_config.agent_name}-logs-data"
     )
 
-    print(f"📦 Creating artifacts bucket: {artifacts_bucket_name}")
+    print(f"Creating artifacts bucket: {artifacts_bucket_name}")
 
     create_bucket_if_not_exists(
         bucket_name=artifacts_bucket_name,
@@ -175,10 +175,10 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
     )
 
     if existing_agents:
-        print(f"🔄 Updating existing agent: {deployment_config.agent_name}")
+        print(f"Updating existing agent: {deployment_config.agent_name}")
         remote_agent = existing_agents[0].update(**agent_config)
     else:
-        print(f"🆕 Creating new agent: {deployment_config.agent_name}")
+        print(f"Creating new agent: {deployment_config.agent_name}")
         remote_agent = agent_engines.create(**agent_config)
 
     # Step 9: Save deployment metadata
@@ -211,9 +211,9 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
     with open(metadata_file, "w") as f:
         json.dump(metadata, f, indent=2)
 
-    print("✅ Agent deployed successfully!")
-    print(f"📄 Deployment metadata saved to: {metadata_file}")
-    print(f"🆔 Agent Engine ID: {remote_agent.resource_name}")
+    print("[SUCCESS] Agent deployed successfully!")
+    print(f"Deployment metadata saved to: {metadata_file}")
+    print(f"Agent Engine ID: {remote_agent.resource_name}")
 
     return remote_agent
 
@@ -221,11 +221,11 @@ def deploy_agent_engine_app() -> agent_engines.AgentEngine:
 if __name__ == "__main__":
     print(
         """
-    ╔═══════════════════════════════════════════════════════════╗
-    ║                                                           ║
-    ║   🤖 DEPLOYING AGENT TO VERTEX AI AGENT ENGINE 🤖         ║
-    ║                                                           ║
-    ╚═══════════════════════════════════════════════════════════╝
+    ===========================================================
+    
+       DEPLOYING AGENT TO VERTEX AI AGENT ENGINE         
+    
+    ===========================================================
     """
     )
 
